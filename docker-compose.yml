@@ -1,0 +1,23 @@
+# Local container run. Build the image and serve it on http://localhost:3000.
+#   docker compose up --build
+services:
+  web:
+    build:
+      context: .
+      args:
+        VITE_API_BASE_URL: /api
+    image: jarvis-app-prod:local
+    ports:
+      - "3000:8080"
+    environment:
+      # Backend that /api/* is proxied to. Point this at your API service.
+      API_TARGET: http://backend:8080
+    restart: unless-stopped
+    # depends_on:
+    #   - backend
+
+  # Example backend service — replace with your real API.
+  # backend:
+  #   image: your-backend:latest
+  #   expose:
+  #     - "8080"
