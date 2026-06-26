@@ -1,0 +1,27 @@
+# dependencies & build artifacts
+node_modules
+dist
+build
+coverage
+
+# vcs & ci
+.git
+.gitignore
+.github
+
+# env & secrets (build uses the VITE_API_BASE_URL build-arg instead)
+.env
+.env.*
+
+# editor / os
+.vscode
+.idea
+.DS_Store
+
+# docs & local tooling
+README.md
+plans
+*.log
+Dockerfile
+.dockerignore
+docker-compose.yml
