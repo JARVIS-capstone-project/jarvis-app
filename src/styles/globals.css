@@ -1,1 +1,99 @@
 @import 'tailwindcss';
+
+/* Dark mode is class-driven: add `class="dark"` on <html>/<body> */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ─────────────────────────────────────────────────────────────
+   J.A.R.V.I.S color palette — runtime tokens
+   Light = :root, Dark = .dark. Mapped into Tailwind via @theme inline.
+   ───────────────────────────────────────────────────────────── */
+
+:root {
+  /* Neutrals */
+  --canvas: #faf6f2;
+  --surface: #ede5dc;
+  --panel: #ffffff;
+  --elevated: #ffffff;
+
+  /* Text */
+  --heading: #1c1410;
+  --body: #4a3728;
+  --brown: #785032; /* base brown — source of the alpha lines below */
+  --muted: #a08b7d;
+  --subtle: #a08b7d;
+
+  /* Orange accent */
+  --brand: #fe6128;
+  --brand-hover: #fe6128;
+  --brand-active: #fe6128;
+  --brand-shadow: rgba(254, 97, 40, 0.35);
+  --brand-glow-strong: rgba(254, 97, 40, 0.18);
+  --brand-glow-soft: rgba(254, 97, 40, 0.1);
+
+  /* Lines & states */
+  --divider-strong: rgba(120, 80, 50, 0.25);
+  --divider: rgba(120, 80, 50, 0.15);
+  --divider-faint: rgba(120, 80, 50, 0.08);
+  --hover: rgba(120, 80, 50, 0.08);
+}
+
+.dark {
+  /* Neutrals */
+  --canvas: #0f0c0a;
+  --surface: #1c1510;
+  --panel: #241c16;
+  --elevated: #2e2319;
+
+  /* Text (--brown is inherited from :root) */
+  --heading: #faf6f2;
+  --body: #ede5dc;
+  --muted: #c9b8a8;
+  --subtle: #a08b7d;
+
+  /* Orange accent */
+  --brand: #fe6128;
+  --brand-hover: #ff8a5c;
+  --brand-active: rgba(254, 97, 40, 0.3);
+  --brand-shadow: rgba(254, 97, 40, 0.3);
+  --brand-glow-strong: rgba(254, 97, 40, 0.15);
+  --brand-glow-soft: rgba(254, 97, 40, 0.08);
+
+  /* Lines & states */
+  --divider-strong: rgba(245, 237, 228, 0.12);
+  --divider: rgba(245, 237, 228, 0.12);
+  --divider-faint: rgba(245, 237, 228, 0.04);
+  --hover: rgba(245, 237, 228, 0.07);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Tailwind theme — `inline` so utilities track the runtime vars,
+   keeping dark-mode overrides live (bg-canvas, text-heading, …).
+   ───────────────────────────────────────────────────────────── */
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-panel: var(--panel);
+  --color-elevated: var(--elevated);
+
+  --color-heading: var(--heading);
+  --color-body: var(--body);
+  --color-brown: var(--brown);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-active: var(--brand-active);
+  --color-brand-shadow: var(--brand-shadow);
+  --color-brand-glow-strong: var(--brand-glow-strong);
+  --color-brand-glow-soft: var(--brand-glow-soft);
+
+  --color-divider-strong: var(--divider-strong);
+  --color-divider: var(--divider);
+  --color-divider-faint: var(--divider-faint);
+  --color-hover: var(--hover);
+
+  --font-display: 'Instrument Sans', sans-serif;
+  --font-sans: 'Inter', sans-serif;
+  --font-mono: 'Menlo', monospace;
+}
