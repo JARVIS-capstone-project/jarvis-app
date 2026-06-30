@@ -124,3 +124,12 @@
   --font-sans: 'Inter', sans-serif;
   --font-mono: 'Menlo', monospace;
 }
+
+/* Base document background follows the active theme. Without this, any area a
+   page wrapper doesn't cover (content shorter/taller than the wrapper) reveals
+   the browser's default background and shows a seam. */
+html,
+body {
+  background-color: var(--canvas);
+  color: var(--body);
+}

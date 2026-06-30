@@ -1,6 +1,6 @@
 import type { RouteObject } from 'react-router'
 import { AppLayout } from '@app/layout/app-layout'
-import { homeRoutes } from '@modules/home'
+import { landingRoutes } from '@modules/landing'
 import { designRoutes } from '@modules/design'
 
 /**
@@ -11,7 +11,7 @@ export const routes: RouteObject[] = [
   {
     path: '/',
     element: <AppLayout />,
-    children: [...homeRoutes],
+    children: [...landingRoutes],
   },
   // Full-bleed dev pages rendered outside the app shell layout.
   ...designRoutes,
