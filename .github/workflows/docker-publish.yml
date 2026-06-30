@@ -54,7 +54,7 @@ jobs:
 
       # On PRs: build only (validates the Dockerfile). On main/tags: build + push.
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
