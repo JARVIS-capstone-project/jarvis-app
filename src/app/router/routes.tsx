@@ -1,18 +1,24 @@
 import type { RouteObject } from 'react-router'
 import { AppLayout } from '@app/layout/app-layout'
 import { landingRoutes } from '@modules/landing'
-import { designRoutes } from '@modules/design'
+import { DevIndexPage, designRoutes } from '@modules/design'
+import { authRoutes } from '@modules/auth'
 
 /**
  * Each feature module owns and exports its own routes; the app shell only
- * composes them under the shared layout. Add a module's routes here.
+ * composes them.
+ *
+ * - `/`      full-bleed landing (marketing entry)
+ * - `/dev`   design-system index inside the AppLayout shell
+ * - other    full-bleed pages (design references, auth) mounted outside the shell
  */
 export const routes: RouteObject[] = [
+  ...landingRoutes,
   {
-    path: '/',
+    path: '/dev',
     element: <AppLayout />,
-    children: [...landingRoutes],
+    children: [{ index: true, element: <DevIndexPage /> }],
   },
-  // Full-bleed dev pages rendered outside the app shell layout.
   ...designRoutes,
+  ...authRoutes,
 ]

@@ -1,4 +1,5 @@
 import { useTheme } from '@app/providers/theme-context'
+import { BrandMark } from '@shared/ui/brand-mark'
 import { ComponentCard } from '@modules/design/ui/components/component-card'
 import { componentRegistry } from '@modules/design/ui/data/component-registry'
 
@@ -24,7 +25,8 @@ export function ComponentGalleryPage() {
 
       <div className="mx-auto max-w-4xl px-6 py-16">
         <header className="mb-10">
-          <div className="text-[11px] font-semibold uppercase tracking-[3px] text-brand">
+          <BrandMark className="h-10 drop-shadow-[0_0_16px_var(--brand-glow-strong)]" />
+          <div className="mt-4 text-[11px] font-semibold uppercase tracking-[3px] text-brand">
             J.A.R.V.I.S Design System
           </div>
           <h1 className="mt-3 font-display text-4xl text-heading">Components</h1>
