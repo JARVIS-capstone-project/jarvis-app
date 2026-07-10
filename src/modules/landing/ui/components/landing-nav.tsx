@@ -49,16 +49,17 @@ function NavLink({
 /**
  * Fixed morphing top nav.
  *
- *   - Top of page       — full-bleed, transparent, white text (dark hero)
- *   - Scrolled or menu  — 90% width pill (max 1000px), glass, dark text
+ *   - Top of page       — full-bleed, transparent
+ *   - Scrolled or menu  — 90% width pill (max 1000px), glass
  *
  * Container morph is pure Tailwind + CSS transition-all on a single className
  * ternary. Child colors get their own 300ms transitions. The mobile drawer
  * uses framer-motion `AnimatePresence` for the height open/close.
  *
- * The morphed pill wears the `.light` class so JARVIS tokens (--heading,
- * --body, --brand) resolve to their light-mode values regardless of the
- * app-wide theme — keeps the glass pill legible in dark mode too.
+ * Theme-adaptive: both the pill and the ambient text use semantic tokens
+ * (`bg-surface`, `border-divider`, `text-heading`, `text-body`) so the nav
+ * flips with the app-wide `.dark` class — dark pill + light text on dark,
+ * cream pill + dark text on light.
  */
 export function LandingNav() {
   const [scrolled, setScrolled] = useState(false)
@@ -81,7 +82,7 @@ export function LandingNav() {
         className={
           'flex items-center transition-all duration-500 ' +
           (morphed
-            ? 'light mt-3 w-[90%] max-w-[1000px] rounded-[24px] border border-white/60 bg-white/80 px-4 py-2 shadow-[0_16px_40px_var(--brand-shadow)] backdrop-blur-xl'
+            ? 'mt-3 w-[90%] max-w-[1000px] rounded-[24px] border border-divider bg-surface/80 px-4 py-2 shadow-[0_16px_40px_var(--brand-shadow)] backdrop-blur-xl'
             : 'mt-0 w-full max-w-none rounded-none border border-transparent bg-transparent px-8 py-5 shadow-none backdrop-blur-0')
         }
       >
@@ -162,7 +163,7 @@ export function LandingNav() {
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-            className="light mt-2 w-[90%] max-w-[1000px] overflow-hidden rounded-[24px] border border-white/60 bg-white/90 shadow-[0_16px_40px_var(--brand-shadow)] backdrop-blur-xl md:hidden"
+            className="mt-2 w-[90%] max-w-[1000px] overflow-hidden rounded-[24px] border border-divider bg-surface/90 shadow-[0_16px_40px_var(--brand-shadow)] backdrop-blur-xl md:hidden"
           >
             <div className="flex flex-col gap-1 p-4">
               {NAV_LINKS.map((l) => (
