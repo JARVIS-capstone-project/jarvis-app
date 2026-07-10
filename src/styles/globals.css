@@ -1,4 +1,4 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 
 /* Dark mode is class-driven: add `class="dark"` on <html>/<body> */
 @custom-variant dark (&:where(.dark, .dark *));
@@ -120,16 +120,127 @@
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
 
-  --font-display: 'Instrument Sans', sans-serif;
-  --font-sans: 'Inter', sans-serif;
-  --font-mono: 'Menlo', monospace;
+  /* Brand typography — Inter everywhere. All four tokens resolve to the same
+     family so every Tailwind font utility (font-display, font-sans, font-inter,
+     font-mono) renders identically. `--font-inter` makes `font-inter` a real
+     Tailwind class alongside the standard ones. */
+  --font-display: "Inter", sans-serif;
+  --font-sans: "Inter", sans-serif;
+  --font-inter: "Inter", sans-serif;
+  --font-mono: "Inter", sans-serif;
 }
 
-/* Base document background follows the active theme. Without this, any area a
-   page wrapper doesn't cover (content shorter/taller than the wrapper) reveals
-   the browser's default background and shows a seam. */
+/* Base document background + font follow the active theme. Without this, any
+   area a page wrapper doesn't cover reveals the browser's default background
+   (showing a seam) and Inter would not apply to root-level text. */
 html,
 body {
   background-color: var(--canvas);
   color: var(--body);
+  font-family: var(--font-sans);
+  /* Inter's designer alternates — sharper 'a', straighter 'l', tabular figures
+     for status labels — subtle but distinctly on-brand. */
+  font-feature-settings: "cv11", "ss01", "ss03";
+  font-optical-sizing: auto;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   HUD animations — used by the arc-reactor / HUD scene (/login, /).
+   Kept opacity/transform-only for GPU compositing; each honors
+   prefers-reduced-motion by falling back to a static frame.
+   ───────────────────────────────────────────────────────────── */
+@keyframes hud-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes hud-spin-reverse {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(-360deg);
+  }
+}
+@keyframes hud-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+@keyframes hud-boot-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+}
+@keyframes hud-scanline {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(100vh);
+  }
+}
+@keyframes hud-flicker {
+  0%,
+  92%,
+  100% {
+    opacity: 1;
+  }
+  93% {
+    opacity: 0.6;
+  }
+  95% {
+    opacity: 1;
+  }
+  97% {
+    opacity: 0.8;
+  }
+}
+
+.hud-spin {
+  animation: hud-spin 24s linear infinite;
+}
+.hud-spin-slow {
+  animation: hud-spin 60s linear infinite;
+}
+.hud-spin-rev {
+  animation: hud-spin-reverse 40s linear infinite;
+}
+.hud-pulse {
+  animation: hud-pulse 2.4s ease-in-out infinite;
+}
+.hud-boot {
+  animation: hud-boot-in 0.6s ease-out both;
+}
+.hud-scanline {
+  animation: hud-scanline 6s linear infinite;
+}
+.hud-flicker {
+  animation: hud-flicker 5s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-spin,
+  .hud-spin-slow,
+  .hud-spin-rev,
+  .hud-pulse,
+  .hud-boot,
+  .hud-scanline,
+  .hud-flicker {
+    animation: none !important;
+  }
 }
