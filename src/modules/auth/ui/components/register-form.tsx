@@ -3,14 +3,14 @@ import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { motion } from 'framer-motion'
 import type { Variants } from 'framer-motion'
-import { ArrowRight, Fingerprint, Lock, Mail } from 'lucide-react'
+import { ArrowRight, KeyRound, Lock, Mail } from 'lucide-react'
 import { BrandMark } from '@shared/ui/brand-mark'
 import { Button } from '@shared/ui/button'
 import { Input } from '@shared/ui/input'
-import { useLogin } from '@modules/auth/model/use-login'
+import { useRegister } from '@modules/auth/model/use-register'
 
-// Container drives the reveal: waits 0.4s after mount (letting the HUD + reactor
-// settle first), then reveals each child 0.08s apart. Total sequence ~1.2s.
+// Container drives the reveal: waits 0.4s after mount (letting the HUD +
+// reactor settle first), then reveals each child 0.08s apart.
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
   show: {
@@ -19,8 +19,6 @@ const containerVariants: Variants = {
   },
 }
 
-// Each item slides up 12px while fading. easeOutExpo-ish curve for a confident
-// arrival — no lazy easing that reads as sluggish.
 const itemVariants: Variants = {
   hidden: { opacity: 0, y: 12 },
   show: {
@@ -31,22 +29,47 @@ const itemVariants: Variants = {
 }
 
 /**
- * The login card. Owns field state so the hook can stay focused on the async
- * submit lifecycle. Uses the shared Input (which already handles password
- * reveal) and Button primitives so styling stays token-driven.
+ * The register card. Owns field state + client-side gate (matching passwords
+ * + terms); useRegister owns the submit lifecycle. On success the store is
+ * already populated by the hook, so navigate to /new directly.
+ *
+ * Two error surfaces — merged into a single displayed message:
+ *   - clientError: pre-submit gate failures (password mismatch, terms).
+ *   - hook.error : post-submit BE failure (409 duplicate email, 400 validation).
+ * Whichever is truthy wins; both clear when the user edits any field.
  */
-export function LoginForm() {
+export function RegisterForm() {
   const navigate = useNavigate()
-  const { submit, isSubmitting, error, clearError } = useLogin()
+  const { submit, isSubmitting, error: submitError, clearError: clearSubmitError } = useRegister()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [remember, setRemember] = useState(true)
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
+  const [clientError, setClientError] = useState<string | null>(null)
 
-  // Already-authed short-circuit lives at the route level (<RedirectIfAuthed>
-  // in modules/auth/routes.tsx) — no in-form effect needed.
+  const error = clientError ?? submitError
+
+  const clearError = () => {
+    if (clientError) setClientError(null)
+    clearSubmitError()
+  }
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const session = await submit({ email, password, remember })
+    setClientError(null)
+    if (password.length < 8) {
+      setClientError('Password must be at least 8 characters.')
+      return
+    }
+    if (password !== confirmPassword) {
+      setClientError("Passwords don't match.")
+      return
+    }
+    if (!acceptedTerms) {
+      setClientError('You must accept the terms & conditions.')
+      return
+    }
+    const session = await submit({ email, password })
     if (session) navigate('/new', { replace: true })
   }
 
@@ -57,47 +80,36 @@ export function LoginForm() {
       initial="hidden"
       animate="show"
       style={{
-        // Layered shadows fake a hovering glass panel: sharp near-shadow for
-        // lift, orange bloom for the reactor spill, inset highlight for the
-        // top edge catching ambient light.
         boxShadow:
           '0 30px 60px -20px rgba(0,0,0,0.35), 0 0 80px var(--brand-glow-soft), inset 0 1px 0 rgba(255,255,255,0.08)',
       }}
       className="relative w-full space-y-5 rounded-2xl border border-brand/30 bg-panel/85 p-8 backdrop-blur-xl"
     >
-      {/* Top specular sheen — a thin gradient along the upper edge that mimics
-          light glinting off a beveled glass top. Purely decorative. */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-6 top-0 h-px"
         style={{
-          background:
-            'linear-gradient(to right, transparent, var(--brand-hover), transparent)',
+          background: 'linear-gradient(to right, transparent, var(--brand-hover), transparent)',
         }}
       />
 
-      {/* Brand mark — anchors the card and reinforces the JARVIS lockup. */}
       <motion.div variants={itemVariants} className="flex justify-center">
         <BrandMark className="h-12 drop-shadow-[0_0_20px_var(--brand-glow-strong)]" />
       </motion.div>
 
-      {/* Eyebrow — mirrors the landing page's small-caps brand mark. */}
       <motion.div
         variants={itemVariants}
         className="flex items-center justify-center gap-2 font-mono text-[10px] uppercase tracking-[0.3em] text-brand"
       >
-        <Fingerprint className="size-3.5" aria-hidden="true" />
-        <span>Identity · Verification</span>
+        <KeyRound className="size-3.5" aria-hidden="true" />
+        <span>New · Registration</span>
       </motion.div>
 
       <motion.div variants={itemVariants} className="space-y-1 text-center">
-        <h1 className="font-display text-3xl text-heading">Welcome back, Operator.</h1>
-        <p className="text-sm text-muted">Authenticate to bring your workspace online.</p>
+        <h1 className="font-display text-3xl text-heading">Establish your identity.</h1>
+        <p className="text-sm text-muted">Provision credentials to bring your workspace online.</p>
       </motion.div>
 
-      {/* Global error surface — sits above fields so it's the first thing read.
-          Not staggered: mounts/unmounts with its own quick fade so state changes
-          don't wait on the intro sequence. */}
       {error && (
         <motion.div
           initial={{ opacity: 0, y: -6 }}
@@ -128,23 +140,13 @@ export function LoginForm() {
         />
       </motion.div>
 
-      <motion.div variants={itemVariants} className="space-y-1.5">
-        <div className="flex items-center justify-between">
-          <label htmlFor="login-password" className="text-sm font-medium text-heading">
-            Password
-          </label>
-          <Link
-            to="/forgot-password"
-            className="cursor-pointer text-xs text-brand transition-colors hover:text-brand-hover"
-          >
-            Forgot?
-          </Link>
-        </div>
+      <motion.div variants={itemVariants}>
         <Input
-          id="login-password"
+          id="register-password"
+          label="Password"
           type="password"
-          autoComplete="current-password"
-          placeholder="••••••••••"
+          autoComplete="new-password"
+          placeholder="At least 8 characters"
           value={password}
           onChange={(e) => {
             setPassword(e.target.value)
@@ -155,17 +157,46 @@ export function LoginForm() {
         />
       </motion.div>
 
+      <motion.div variants={itemVariants}>
+        <Input
+          label="Confirm password"
+          type="password"
+          autoComplete="new-password"
+          placeholder="Re-enter your password"
+          value={confirmPassword}
+          onChange={(e) => {
+            setConfirmPassword(e.target.value)
+            clearError()
+          }}
+          leftIcon={<Lock className="size-4" />}
+          required
+        />
+      </motion.div>
+
       <motion.label
         variants={itemVariants}
-        className="flex cursor-pointer items-center gap-2 text-sm text-body select-none"
+        className="flex cursor-pointer items-start gap-2 text-sm text-body select-none"
       >
         <input
           type="checkbox"
-          checked={remember}
-          onChange={(e) => setRemember(e.target.checked)}
-          className="size-4 cursor-pointer accent-brand"
+          checked={acceptedTerms}
+          onChange={(e) => {
+            setAcceptedTerms(e.target.checked)
+            clearError()
+          }}
+          className="mt-0.5 size-4 shrink-0 cursor-pointer accent-brand"
         />
-        Keep this session online for 30 days
+        <span>
+          I agree to the{' '}
+          <a
+            href="#"
+            className="text-brand transition-colors hover:text-brand-hover"
+            onClick={(e) => e.preventDefault()}
+          >
+            Terms &amp; Conditions
+          </a>
+          .
+        </span>
       </motion.label>
 
       <motion.div variants={itemVariants}>
@@ -177,17 +208,14 @@ export function LoginForm() {
           rightIcon={!isSubmitting ? <ArrowRight className="size-4" /> : undefined}
           className="w-full"
         >
-          {isSubmitting ? 'Authenticating' : 'Engage'}
+          {isSubmitting ? 'Provisioning' : 'Establish identity'}
         </Button>
       </motion.div>
 
       <motion.p variants={itemVariants} className="text-center text-xs text-muted">
-        No credentials on file?{' '}
-        <Link
-          to="/register"
-          className="cursor-pointer font-medium text-brand transition-colors hover:text-brand-hover"
-        >
-          Request access
+        Already have credentials?{' '}
+        <Link to="/login" className="font-medium text-brand transition-colors hover:text-brand-hover">
+          Log in
         </Link>
       </motion.p>
     </motion.form>
