@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { LogOut, Upload, User2, X } from 'lucide-react'
-import { useAuthStore, useUser } from '@modules/auth/model/auth-store'
+import { useAuthStore } from '@modules/auth/model/auth-store'
 import { env } from '@shared/config/env'
 import { httpClient } from '@shared/api/http-client'
 import { Button } from '@shared/ui/button'
@@ -33,7 +33,6 @@ interface MeResult {
  */
 export function NewChatPage() {
   const navigate = useNavigate()
-  const user = useUser()
   const [meResult, setMeResult] = useState<MeResult | null>(null)
   const [files, setFiles] = useState<AttachedFile[]>([])
 
@@ -103,13 +102,6 @@ export function NewChatPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-8 px-6 py-10">
       <h1 className="font-mono text-2xl uppercase tracking-[0.3em] text-heading">Chat</h1>
-
-      <section className="rounded-2xl border border-divider bg-surface/60 p-6">
-        <h2 className="font-mono text-xs uppercase tracking-[0.3em] text-body">Current user</h2>
-        <pre className="mt-3 overflow-x-auto text-xs text-heading">
-          {user ? JSON.stringify(user, null, 2) : '— no user in store —'}
-        </pre>
-      </section>
 
       {/* TEST SCAFFOLDING — remove when real chat UI ships. */}
       <section className="space-y-4 rounded-2xl border border-divider bg-surface/60 p-6">

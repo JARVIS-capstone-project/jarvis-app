@@ -34,10 +34,9 @@ export function useRegister(): UseRegisterResult {
     setState((prev) => ({ ...prev, isSubmitting: true, error: null }))
     try {
       const session = await authService.register(credentials)
-      // Only accessToken + user go into memory. refreshToken lives in an
-      // HttpOnly cookie set by the same response — never touched here.
-      const { accessToken, user } = session
-      useAuthStore.getState().setSession(accessToken, user)
+      // Only accessToken goes into memory. refreshToken lives in an HttpOnly
+      // cookie set by the same response — never touched here.
+      useAuthStore.getState().setSession(session.accessToken)
       setState({ isSubmitting: false, error: null, session })
       return session
     } catch (err) {

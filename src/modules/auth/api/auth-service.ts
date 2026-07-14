@@ -14,20 +14,12 @@ export interface RegisterCredentials {
   password: string
 }
 
-// Mirrors the BE `UserSummary` DTO — kept in one place so the store, the
-// login response, and any future /me consumer share a single shape.
-export interface UserSummary {
-  id: string
-  email: string
-  roles: string[]
-}
-
+// Login/register response shape. The accessToken is a JWT and carries user
+// identity (email, id, roles) in its payload — decode on demand at the call
+// site. BE also returns refreshToken in the body, but the FE ignores it: the
+// browser stores it via the HttpOnly cookie set on the same response.
 export interface LoginSession {
   accessToken: string
-  // BE also returns refreshToken in the body — ignored on the FE; the browser
-  // handles it via an HttpOnly cookie set on the same login response.
-  refreshToken?: string
-  user: UserSummary
 }
 
 /**
@@ -43,16 +35,12 @@ export const authService = {
 
   // BE returns AuthResponse (accessToken + refreshToken + user) with 201, so
   // a successful register auto-logs the caller in — the FE treats it as a
-  // login response.
+  // login response and reads only accessToken.
   register(credentials: RegisterCredentials): Promise<LoginSession> {
     return httpClient.post<LoginSession>('/auth/register', credentials)
   },
 
   logout(): Promise<void> {
     return httpClient.post<void>('/auth/logout')
-  },
-
-  currentSession(): Promise<UserSummary> {
-    return httpClient.get<UserSummary>('/auth/me')
   },
 }
