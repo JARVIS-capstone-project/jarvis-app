@@ -43,6 +43,10 @@ export function AttachmentPreviewModal({ target, onClose }: Props) {
         className="relative flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-panel"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* TODO(BE-two-urls): add a Download button here wired to the
+            `download_url` field once BE returns it (see kb-service.ts).
+            That will also make docx/other non-previewable types actually
+            downloadable from the modal instead of showing a plain link. */}
         <header className="flex items-center justify-between border-b border-divider px-4 py-3">
           <h3 className="truncate text-sm font-medium text-heading" title={filename}>
             {filename || 'Preview'}

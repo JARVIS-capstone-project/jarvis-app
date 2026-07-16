@@ -74,6 +74,9 @@ export function useDocumentPreview(target: PreviewTarget): Result {
       // The signed URL lives only in this component's state — never written
       // to documents-store or IndexedDB. On unmount (close) it just falls
       // out of memory. The BE DTO explicitly warns against persisting it.
+      //
+      // TODO(BE-two-urls): swap `res.file_url` for `res.preview_url` when BE
+      // ships the preview+download URL pair (see kb-service.ts).
       try {
         const res = await kbService.getDocumentContent(doc.sourceId)
         if (cancelled) return
