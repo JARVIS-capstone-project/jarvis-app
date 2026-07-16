@@ -1,4 +1,7 @@
+import { useState } from 'react'
+import { AttachmentPreviewModal } from '@modules/chat/ui/components/attachment-preview-modal'
 import { AttachmentTile } from '@modules/chat/ui/components/attachment-tile'
+import type { PreviewTarget } from '@modules/chat/model/use-document-preview'
 import { cn } from '@shared/lib/cn'
 import type { ChatMessage } from '@modules/chat/model/types'
 
@@ -17,6 +20,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === 'user'
   const hasAttachments = Boolean(message.attachments && message.attachments.length > 0)
   const hasText = message.content.length > 0
+  const [preview, setPreview] = useState<PreviewTarget | null>(null)
 
   return (
     <div className={cn('flex w-full', isUser ? 'justify-end' : 'justify-start')}>
@@ -29,12 +33,19 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         {hasAttachments && (
           <div className="flex flex-wrap gap-2">
             {message.attachments!.map((a) => (
-              <AttachmentTile key={a.key} attachment={a} />
+              <AttachmentTile
+                key={a.key}
+                attachment={a}
+                onOpenPreview={() => setPreview({ kind: 'live', attachment: a })}
+              />
             ))}
           </div>
         )}
         {hasText && <div className="whitespace-pre-wrap wrap-break-word">{message.content}</div>}
       </div>
+      {preview && (
+        <AttachmentPreviewModal target={preview} onClose={() => setPreview(null)} />
+      )}
     </div>
   )
 }

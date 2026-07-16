@@ -1,4 +1,4 @@
-import { X } from 'lucide-react'
+import { AlertCircle, Loader2, X } from 'lucide-react'
 import { usePdfThumbnail } from '@modules/chat/model/use-pdf-thumbnail'
 import type { ChatAttachment } from '@modules/chat/model/types'
 import { cn } from '@shared/lib/cn'
@@ -8,6 +8,10 @@ interface AttachmentTileProps {
   /** When provided, an X button renders top-right and calls this. Omit
    *  inside message bubbles (post-send — nothing to remove). */
   onRemove?: () => void
+  /** When provided, the tile becomes a button that fires this. Consumers
+   *  render the preview modal. When omitted (e.g. design gallery), the
+   *  tile visual is non-interactive. */
+  onOpenPreview?: () => void
 }
 
 type Kind = 'image' | 'pdf' | 'other'
@@ -19,27 +23,40 @@ type Kind = 'image' | 'pdf' | 'other'
  * type shows a filename + type badge. Clicking the tile opens the file
  * in a new tab.
  */
-export function AttachmentTile({ attachment, onRemove }: AttachmentTileProps) {
+export function AttachmentTile({ attachment, onRemove, onOpenPreview }: AttachmentTileProps) {
   const kind = getKind(attachment.file)
   const ext = getExtension(attachment.file.name)
+  const isUploading = attachment.uploadStatus === 'uploading'
+  const isFailed = attachment.uploadStatus === 'failed'
+  const canOpen = Boolean(onOpenPreview) && !isUploading && !isFailed
+
+  const body = (
+    <>
+      {kind === 'image' && <ImagePreview attachment={attachment} />}
+      {kind === 'pdf' && <PdfPreview attachment={attachment} />}
+      {kind === 'other' && <FilePlaceholder name={attachment.file.name} ext={ext} />}
+    </>
+  )
 
   return (
     <div
       className="relative size-30 shrink-0 overflow-hidden rounded-lg border border-divider bg-panel"
-      title={attachment.file.name}
+      title={isFailed ? attachment.errorMessage ?? attachment.file.name : attachment.file.name}
     >
-      {/* Click-to-open wraps the visual — one click target for the whole tile. */}
-      <a
-        href={attachment.previewUrl}
-        target="_blank"
-        rel="noreferrer"
-        aria-label={`Open ${attachment.file.name}`}
-        className="block size-full"
-      >
-        {kind === 'image' && <ImagePreview attachment={attachment} />}
-        {kind === 'pdf' && <PdfPreview attachment={attachment} />}
-        {kind === 'other' && <FilePlaceholder name={attachment.file.name} ext={ext} />}
-      </a>
+      {/* One click target for the whole tile — a button when a consumer
+          wants the preview modal, a plain div otherwise (design gallery). */}
+      {canOpen ? (
+        <button
+          type="button"
+          onClick={onOpenPreview}
+          aria-label={`Preview ${attachment.file.name}`}
+          className="block size-full text-left"
+        >
+          {body}
+        </button>
+      ) : (
+        <div className="size-full">{body}</div>
+      )}
 
       {/* Preview tiles get a small scrim type badge overlay bottom-left.
           Non-preview tiles show the ext inline in FilePlaceholder instead. */}
@@ -49,9 +66,25 @@ export function AttachmentTile({ attachment, onRemove }: AttachmentTileProps) {
         </span>
       )}
 
-      {/* Remove sits above the anchor via later DOM order. Stop propagation
-          so clicking X doesn't also trigger the anchor's navigation. */}
-      {onRemove && (
+      {/* Uploading overlay — scrim with a spinner, blocks the anchor click. */}
+      {isUploading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-scrim">
+          <Loader2 className="size-6 animate-spin text-white" />
+        </div>
+      )}
+
+      {/* Failed overlay — surface the error visually; tooltip on the tile
+          root already exposes the errorMessage. */}
+      {isFailed && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-scrim text-white">
+          <AlertCircle className="size-6 text-danger" />
+          <span className="text-[10px] uppercase tracking-wider">Failed</span>
+        </div>
+      )}
+
+      {/* Remove sits above the anchor via later DOM order. Hidden mid-upload
+          so the user can't yank the file out from under the request. */}
+      {onRemove && !isUploading && (
         <button
           type="button"
           onClick={(e) => {

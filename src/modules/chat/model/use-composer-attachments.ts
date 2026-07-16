@@ -10,6 +10,10 @@ interface UseComposerAttachmentsResult {
   /** Clear composer state WITHOUT revoking — call after send so the
    *  URLs stay live for the message bubble that inherits them. */
   reset: () => void
+  /** Overwrite the attachment list wholesale (also syncs the unmount-cleanup
+   *  ref). Used by the upload orchestrator to write back post-upload states
+   *  without revoking any URLs. */
+  replaceAll: (next: ChatAttachment[]) => void
 }
 
 /**
@@ -44,6 +48,7 @@ export function useComposerAttachments(): UseComposerAttachmentsResult {
       key: crypto.randomUUID(),
       file,
       previewUrl: URL.createObjectURL(file),
+      uploadStatus: 'pending',
     }))
     setAttachments((prev) => [...prev, ...next])
   }, [])
@@ -63,5 +68,11 @@ export function useComposerAttachments(): UseComposerAttachmentsResult {
     setAttachments([])
   }, [])
 
-  return { attachments, pick, remove, reset }
+  const replaceAll = useCallback((next: ChatAttachment[]) => {
+    // Sync the ref so unmount-cleanup revokes the CURRENT set, not stale ones.
+    ref.current = next
+    setAttachments(next)
+  }, [])
+
+  return { attachments, pick, remove, reset, replaceAll }
 }

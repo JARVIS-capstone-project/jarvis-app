@@ -1,8 +1,11 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
-import { ArrowUp, AudioLines, Plus } from 'lucide-react'
+import { ArrowUp, AudioLines, Loader2, Plus } from 'lucide-react'
+import { AttachmentPreviewModal } from '@modules/chat/ui/components/attachment-preview-modal'
 import { AttachmentTile } from '@modules/chat/ui/components/attachment-tile'
 import { useComposerAttachments } from '@modules/chat/model/use-composer-attachments'
+import type { PreviewTarget } from '@modules/chat/model/use-document-preview'
+import { useUploadDocuments } from '@modules/chat/model/use-upload-documents'
 import type { ChatAttachment } from '@modules/chat/model/types'
 import { cn } from '@shared/lib/cn'
 
@@ -22,7 +25,10 @@ interface ChatInputProps {
  */
 export function ChatInput({ onSend, disabled }: ChatInputProps) {
   const [value, setValue] = useState('')
-  const { attachments, pick, remove, reset } = useComposerAttachments()
+  const [busy, setBusy] = useState(false)
+  const [preview, setPreview] = useState<PreviewTarget | null>(null)
+  const { attachments, pick, remove, reset, replaceAll } = useComposerAttachments()
+  const upload = useUploadDocuments()
   const taRef = useRef<HTMLTextAreaElement>(null)
 
   // Resize the textarea to fit content on every value change. Height is
@@ -34,15 +40,44 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
     el.style.height = `${el.scrollHeight}px`
   }, [value])
 
-  const canSend = (value.trim().length > 0 || attachments.length > 0) && !disabled
+  const canSend = (value.trim().length > 0 || attachments.length > 0) && !disabled && !busy
 
-  const submit = () => {
+  const submit = async () => {
     if (!canSend) return
-    onSend(value.trim(), attachments.length > 0 ? attachments : undefined)
-    setValue('')
-    // reset() clears state WITHOUT revoking — the URLs now live on the
-    // message the store just appended.
-    reset()
+
+    // Fast path: no files → instant send, no upload machinery.
+    if (attachments.length === 0) {
+      onSend(value.trim())
+      setValue('')
+      return
+    }
+
+    // Blocking upload flow: fire N parallel POSTs, await all, then decide.
+    setBusy(true)
+    // Flip pending → uploading so each tile shows the spinner overlay while
+    // the request is in flight. Already-uploaded (retry) tiles keep 'done'.
+    const uploading = attachments.map((a) =>
+      a.sourceId ? a : { ...a, uploadStatus: 'uploading' as const },
+    )
+    replaceAll(uploading)
+    try {
+      const updated = await upload(uploading)
+      const anyFailed = updated.some((a) => a.uploadStatus === 'failed')
+      if (anyFailed) {
+        // Reflect statuses in composer so tiles show failed / done correctly.
+        // Do NOT send the message — user retries after seeing the failures.
+        replaceAll(updated)
+        return
+      }
+      // All done → commit message with the enriched attachments (now carry
+      // sourceId + jobId) and clear composer. reset() drops state WITHOUT
+      // revoking blob URLs — the message bubble inherits them.
+      onSend(value.trim(), updated)
+      setValue('')
+      reset()
+    } finally {
+      setBusy(false)
+    }
   }
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -63,6 +98,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
                   key={a.key}
                   attachment={a}
                   onRemove={() => remove(a.key)}
+                  onOpenPreview={() => setPreview({ kind: 'live', attachment: a })}
                 />
               ))}
             </div>
@@ -72,25 +108,32 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask Anything....."
+            placeholder={busy ? 'Uploading…' : 'Ask Anything.....'}
             rows={1}
             aria-label="Message"
+            disabled={busy}
             className={cn(
               'block max-h-40 w-full resize-none overflow-y-auto bg-transparent px-1 py-1.5',
               'text-sm text-heading placeholder:text-muted',
-              'focus:outline-none',
+              'focus:outline-none disabled:cursor-not-allowed',
             )}
           />
           <div className="mt-2 flex items-center justify-between">
             <label
               title="Attach files"
-              className="flex size-9 cursor-pointer items-center justify-center rounded-lg border border-divider bg-surface text-body transition-colors hover:bg-hover hover:text-heading"
+              className={cn(
+                'flex size-9 items-center justify-center rounded-lg border border-divider bg-surface text-body transition-colors',
+                busy
+                  ? 'cursor-not-allowed opacity-50'
+                  : 'cursor-pointer hover:bg-hover hover:text-heading',
+              )}
             >
               <input
                 type="file"
                 multiple
                 aria-label="Attach files"
                 className="sr-only"
+                disabled={busy}
                 onChange={(e) => {
                   pick(e.target.files)
                   // Reset so re-picking the same file still fires change.
@@ -112,20 +155,30 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
                 type="button"
                 onClick={submit}
                 disabled={!canSend}
-                aria-label="Send message"
+                aria-label={busy ? 'Uploading' : 'Send message'}
+                aria-busy={busy}
                 className={cn(
                   'flex size-9 items-center justify-center rounded-lg transition-colors',
                   canSend
                     ? 'bg-brand text-white hover:bg-brand-hover'
-                    : 'cursor-not-allowed bg-surface text-muted',
+                    : busy
+                      ? 'bg-brand text-white'
+                      : 'cursor-not-allowed bg-surface text-muted',
                 )}
               >
-                <ArrowUp className="size-4" />
+                {busy ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <ArrowUp className="size-4" />
+                )}
               </button>
             </div>
           </div>
         </div>
       </div>
+      {preview && (
+        <AttachmentPreviewModal target={preview} onClose={() => setPreview(null)} />
+      )}
     </div>
   )
 }
