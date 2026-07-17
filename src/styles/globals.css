@@ -47,6 +47,11 @@
   --danger-soft: rgba(214, 69, 58, 0.15);
   --warning: #e0962a;
   --warning-soft: rgba(224, 150, 42, 0.15);
+
+  /* Overlays / scrims — dark washes over media, drawers, popovers.
+     Theme-invariant (black on either canvas reads as an overlay). */
+  --scrim: rgba(0, 0, 0, 0.6);
+  --scrim-strong: rgba(0, 0, 0, 0.8);
 }
 
 .dark {
@@ -83,6 +88,10 @@
   --danger-soft: rgba(242, 97, 87, 0.15);
   --warning: #f0aa3c;
   --warning-soft: rgba(240, 170, 60, 0.15);
+
+  /* Overlays — same values as light: black on any theme reads as a scrim. */
+  --scrim: rgba(0, 0, 0, 0.6);
+  --scrim-strong: rgba(0, 0, 0, 0.8);
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -119,6 +128,9 @@
   --color-danger-soft: var(--danger-soft);
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
+
+  --color-scrim: var(--scrim);
+  --color-scrim-strong: var(--scrim-strong);
 
   /* Brand typography — Inter everywhere. All four tokens resolve to the same
      family so every Tailwind font utility (font-display, font-sans, font-inter,
