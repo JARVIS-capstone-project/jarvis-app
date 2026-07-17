@@ -1,61 +1,46 @@
 import { httpClient } from '@shared/api/http-client'
 
-/**
- * Wire-shape of the login endpoint. The BE isn't wired yet, but committing
- * these types now keeps the UI and hook honest — swap the stub body for the
- * real call and the rest of the module compiles unchanged.
- */
 export interface LoginCredentials {
   email: string
   password: string
   remember?: boolean
 }
 
+// Matches the BE `RegisterRequest` DTO exactly — email + password only.
+// Confirm-password and terms-accepted are FE-only concerns and never leave
+// the browser.
+export interface RegisterCredentials {
+  email: string
+  password: string
+}
+
+// Login/register response shape. The accessToken is a JWT and carries user
+// identity (email, id, roles) in its payload — decode on demand at the call
+// site. BE also returns refreshToken in the body, but the FE ignores it: the
+// browser stores it via the HttpOnly cookie set on the same response.
 export interface LoginSession {
   accessToken: string
-  refreshToken?: string
-  user: {
-    id: string
-    email: string
-    displayName?: string
-  }
 }
 
 /**
- * Simulated latency + validation stub. Delete the `simulate*` calls and the
- * `if (!/@/.test(...))` guard when the real `/auth/login` endpoint ships.
- *
- * The real call is left in place, commented, so wiring is a one-line switch.
+ * Auth endpoints. All calls go through httpClient, which attaches the Bearer
+ * token from the auth store (when present) and sets credentials: 'include' so
+ * the HttpOnly refresh cookie can travel back on /auth/refresh once silent
+ * refresh is wired.
  */
 export const authService = {
-  async login(credentials: LoginCredentials): Promise<LoginSession> {
-    // return httpClient.post<LoginSession>('/auth/login', credentials)
-
-    await simulateLatency(900)
-    if (!/@/.test(credentials.email)) throw new Error('Invalid email address.')
-    if (credentials.password.length < 6) throw new Error('Password must be at least 6 characters.')
-
-    return {
-      accessToken: `stub.${btoa(credentials.email)}.${Date.now()}`,
-      user: { id: 'stub-user', email: credentials.email, displayName: 'Operator' },
-    }
+  login(credentials: LoginCredentials): Promise<LoginSession> {
+    return httpClient.post<LoginSession>('/auth/login', credentials)
   },
 
-  async logout(): Promise<void> {
-    // return httpClient.post<void>('/auth/logout')
-    await simulateLatency(200)
+  // BE returns AuthResponse (accessToken + refreshToken + user) with 201, so
+  // a successful register auto-logs the caller in — the FE treats it as a
+  // login response and reads only accessToken.
+  register(credentials: RegisterCredentials): Promise<LoginSession> {
+    return httpClient.post<LoginSession>('/auth/register', credentials)
   },
 
-  async currentSession(): Promise<LoginSession | null> {
-    // return httpClient.get<LoginSession | null>('/auth/session')
-    return null
+  logout(): Promise<void> {
+    return httpClient.post<void>('/auth/logout')
   },
-}
-
-// Keeps the import from being dead-code-eliminated by the compiler while
-// the real endpoints stay commented. Once wired, this line goes away.
-void httpClient
-
-function simulateLatency(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
 }

@@ -3,6 +3,7 @@ import { AppLayout } from '@app/layout/app-layout'
 import { landingRoutes } from '@modules/landing'
 import { DevIndexPage, designRoutes } from '@modules/design'
 import { authRoutes } from '@modules/auth'
+import { chatRoutes } from '@modules/chat'
 
 /**
  * Each feature module owns and exports its own routes; the app shell only
@@ -14,6 +15,7 @@ import { authRoutes } from '@modules/auth'
  */
 export const routes: RouteObject[] = [
   ...landingRoutes,
+  ...chatRoutes,
   {
     path: '/dev',
     element: <AppLayout />,

@@ -14,12 +14,13 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       // Dev proxy: forwards every /api/* call to the backend and logs it,
-      // so you can inspect each request/response in the terminal.
+      // so you can inspect each request/response in the terminal. The BE
+      // controllers are mounted at /api/* (see @RequestMapping in the Spring
+      // AuthController), so the path is forwarded verbatim — no rewrite.
       proxy: {
         '/api': {
           target: apiTarget,
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api/, ''),
           configure: (proxy) => {
             proxy.on('proxyReq', (_proxyReq, req) => {
               console.log(`[proxy] → ${req.method} ${req.url}  ⟶  ${apiTarget}`)
