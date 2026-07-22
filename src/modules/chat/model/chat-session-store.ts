@@ -40,9 +40,13 @@ interface Store {
    *  `GET /sessions/{id}`. Never called during a live stream (the hydration
    *  hook guards against that). */
   setMessages: (sessionId: string, messages: ChatMessage[]) => void
-  /** Append a delta to the LAST assistant message. No-op if the last message
-   *  isn't from the assistant (defensive against out-of-order frames). */
+  /** Append a delta to the LAST assistant message. Also clears any lingering
+   *  `thinking` (text is starting, thinking display is done). No-op if the last
+   *  message isn't from the assistant (defensive against out-of-order frames). */
   patchLastAssistant: (sessionId: string, delta: string) => void
+  /** Replace the LAST assistant message's rolling thinking text. Called by the
+   *  thinking-queue drain — one thinking_delta at a time, spaced 0.8s. */
+  setLastAssistantThinking: (sessionId: string, text: string | null) => void
   setStreaming: (sessionId: string, v: boolean) => void
   /** Flip while `GET /sessions/{id}` is in flight. */
   setHydrating: (sessionId: string, v: boolean) => void
@@ -100,7 +104,23 @@ export const useChatSessionStore = create<Store>((set) => ({
       const msgs = [...cur.messages]
       const last = msgs[msgs.length - 1]
       if (!last || last.role !== 'assistant') return s
-      msgs[msgs.length - 1] = { ...last, content: last.content + delta }
+      // Clear `thinking` unconditionally: once text starts flowing, the
+      // thinking-status line has served its purpose and should disappear.
+      msgs[msgs.length - 1] = {
+        ...last,
+        content: last.content + delta,
+        thinking: null,
+      }
+      return { byId: { ...s.byId, [sessionId]: { ...cur, messages: msgs } } }
+    }),
+
+  setLastAssistantThinking: (sessionId, text) =>
+    set((s) => {
+      const cur = s.byId[sessionId] ?? emptyState()
+      const msgs = [...cur.messages]
+      const last = msgs[msgs.length - 1]
+      if (!last || last.role !== 'assistant') return s
+      msgs[msgs.length - 1] = { ...last, thinking: text }
       return { byId: { ...s.byId, [sessionId]: { ...cur, messages: msgs } } }
     }),
 

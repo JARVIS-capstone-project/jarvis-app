@@ -38,6 +38,13 @@ export interface ChatMessage {
   /** Unix ms — set at append time via Date.now(). */
   createdAt: number
   /**
+   * Currently-displayed `thinking_delta` for a live assistant message. Rolling
+   * status — each new delta REPLACES this (not accumulates). Cleared as soon
+   * as the first `text_delta` lands so `content` takes over. Never persisted:
+   * only exists during an active stream, always undefined post-turn_end.
+   */
+  thinking?: string | null
+  /**
    * Files the user attached to this send. Two flavours:
    *   - `ChatAttachment` — live (this session), carries a `File` + blob URL.
    *     Message-bubble renders it via `AttachmentTile`.

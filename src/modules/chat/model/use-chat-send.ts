@@ -7,6 +7,7 @@ import {
   useChatSessionStore,
 } from '@modules/chat/model/chat-session-store'
 import { useSessionsStore } from '@modules/chat/model/sessions-store'
+import { ThinkingQueue } from '@modules/chat/model/thinking-queue'
 import { useSseStream } from '@modules/chat/model/use-sse-stream'
 import { useUploadDocuments } from '@modules/chat/model/use-upload-documents'
 import type {
@@ -143,6 +144,12 @@ export function useChatSend(): UseChatSendResult {
         // can reject the outer Promise on `turn_end` (BE emits error THEN
         // turn_end — see orchestrator.py fallback paths).
         let agentError: string | null = null
+        // Per-stream thinking queue — throttles thinking_delta display to
+        // 0.8s each and buffers text_delta until the queue drains.
+        const thinking = new ThinkingQueue({
+          onThinking: (text) => store.setLastAssistantThinking(sid!, text),
+          onText: (delta) => store.patchLastAssistant(sid!, delta),
+        })
         await new Promise<void>((resolve, reject) => {
           open(
             sid!,
@@ -150,14 +157,21 @@ export function useChatSend(): UseChatSendResult {
             {
               onFrame: (frame) => {
                 if (frame.event === 'text_delta') {
-                  store.patchLastAssistant(sid!, frame.data.delta)
+                  thinking.addText(frame.data.delta)
+                } else if (frame.event === 'thinking_delta') {
+                  thinking.addThinking(frame.data.delta)
                 } else if (frame.event === 'error') {
                   agentError = frame.data.message || 'Agent error'
                 }
-                // thinking_* / tool_* / warning / turn_start / citation —
+                // thinking_end / tool_* / warning / turn_start / citation —
                 // typed for parser safety but not wired to UI yet.
               },
               onDone: (result) => {
+                // Flush any buffered text and stop the drain timer before
+                // we flip streaming off — otherwise a straggler chunk could
+                // land after `setStreaming(false)` and look like a bug.
+                thinking.dispose()
+                store.setLastAssistantThinking(sid!, null)
                 store.setStreaming(sid!, false)
                 if (agentError) reject(new Error(agentError))
                 else if (result.ok) resolve()
@@ -253,6 +267,10 @@ export function useChatSend(): UseChatSendResult {
       // Same `agentError` capture pattern as `send` — BE emits `error`
       // frame BEFORE `turn_end`, so we buffer it and reject on turn_end.
       let agentError: string | null = null
+      const thinking = new ThinkingQueue({
+        onThinking: (text) => store.setLastAssistantThinking(sessionId, text),
+        onText: (delta) => store.patchLastAssistant(sessionId, delta),
+      })
       try {
         await new Promise<void>((resolve, reject) => {
           open(
@@ -261,12 +279,16 @@ export function useChatSend(): UseChatSendResult {
             {
               onFrame: (frame) => {
                 if (frame.event === 'text_delta') {
-                  store.patchLastAssistant(sessionId, frame.data.delta)
+                  thinking.addText(frame.data.delta)
+                } else if (frame.event === 'thinking_delta') {
+                  thinking.addThinking(frame.data.delta)
                 } else if (frame.event === 'error') {
                   agentError = frame.data.message || 'Agent error'
                 }
               },
               onDone: (result) => {
+                thinking.dispose()
+                store.setLastAssistantThinking(sessionId, null)
                 store.setStreaming(sessionId, false)
                 if (agentError) reject(new Error(agentError))
                 else if (result.ok) resolve()

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { MessageBubble } from '@modules/chat/ui/components/message-bubble'
+import { cn } from '@shared/lib/cn'
 import type { ChatMessage } from '@modules/chat/model/types'
 
 interface ChatMessagesProps {
@@ -33,14 +34,24 @@ export function ChatMessages({ messages, streaming = false }: ChatMessagesProps)
 
   return (
     <div className="flex-1 overflow-y-auto px-6 py-6">
-      <div className="mx-auto flex max-w-3xl flex-col gap-4">
-        {messages.map((m, i) => (
-          <MessageBubble
-            key={m.id}
-            message={m}
-            isThinking={showThinkingOnLast && i === lastIdx}
-          />
-        ))}
+      {/* No container `gap-*` — each item picks its own top margin based on
+          whether the previous message shares its role. Same-role turns stay
+          tight (continuation feel); role changes get extra breathing room so
+          each turn reads as a discrete exchange. */}
+      <div className="mx-auto flex max-w-3xl flex-col">
+        {messages.map((m, i) => {
+          const prev = messages[i - 1]
+          const spacing =
+            i === 0 ? '' : prev?.role === m.role ? 'mt-3' : 'mt-12'
+          return (
+            <div key={m.id} className={cn(spacing)}>
+              <MessageBubble
+                message={m}
+                isThinking={showThinkingOnLast && i === lastIdx}
+              />
+            </div>
+          )
+        })}
         <div ref={bottomRef} />
       </div>
     </div>

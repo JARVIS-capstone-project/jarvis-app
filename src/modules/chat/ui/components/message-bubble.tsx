@@ -20,8 +20,16 @@ interface MessageBubbleProps {
 }
 
 /**
- * Single chat bubble. Right-aligned brand-tinted for the user; left-aligned
- * neutral for the assistant.
+ * Single chat bubble.
+ *
+ * USER — right-aligned brand-tinted rounded bubble, capped at 80% width so
+ *        long lines don't run to the panel edge.
+ *
+ * ASSISTANT — no bubble, no background, no padding. Renders as flush
+ *        markdown/text on the panel background, left-aligned, spanning the
+ *        full parent column (its right edge lines up with the user bubble's).
+ *        This matches the screenshot: an answer that "belongs" to the page,
+ *        not to a container.
  *
  * Attachments come in two flavours per message. Live ones (this session,
  * carry `file`) render via `AttachmentTile` and preview from the in-memory
@@ -34,14 +42,17 @@ export function MessageBubble({ message, isThinking = false }: MessageBubbleProp
   const isUser = message.role === 'user'
   const hasAttachments = Boolean(message.attachments && message.attachments.length > 0)
   const hasText = message.content.length > 0
+  const hasThinking = !isUser && !hasText && Boolean(message.thinking)
   const [preview, setPreview] = useState<PreviewTarget | null>(null)
 
   return (
-    <div className={cn('flex w-full', isUser ? 'justify-end' : 'justify-start')}>
+    <div className={cn('flex w-full', isUser && 'justify-end')}>
       <div
         className={cn(
-          'flex max-w-[80%] flex-col gap-2 rounded-2xl px-4 py-3 text-sm',
-          isUser ? 'bg-brand text-white' : 'border border-divider bg-surface text-heading',
+          'flex flex-col gap-2 text-sm',
+          isUser
+            ? 'max-w-[80%] rounded-2xl bg-brand px-4 py-3 text-white'
+            : 'w-full text-heading',
         )}
       >
         {hasAttachments && (
@@ -77,10 +88,19 @@ export function MessageBubble({ message, isThinking = false }: MessageBubbleProp
             // react-markdown does not render raw HTML by default.
             <Markdown content={message.content} className="wrap-break-word" />
           )
+        ) : hasThinking ? (
+          // Rolling reasoning step — verbatim `thinking_delta` from Gemini.
+          // Rendered as markdown so bolded titles look clean, muted-italic
+          // to read as "reasoning" not "answer". Replaced every 0.8s by the
+          // ThinkingQueue drain; disappears the moment the first `text_delta`
+          // lands (patchLastAssistant clears `thinking`).
+          <Markdown
+            content={message.thinking!}
+            className="wrap-break-word italic text-body opacity-80"
+          />
         ) : (
-          // Empty assistant bubble while stream is live — shown between
-          // `turn_start` and the first `text_delta`. Once a delta lands,
-          // `hasText` flips true and this branch is replaced.
+          // Pre-first-delta gap — between `turn_start` and either the first
+          // `thinking_delta` or the first `text_delta`.
           isThinking && <ThinkingIndicator />
         )}
       </div>
