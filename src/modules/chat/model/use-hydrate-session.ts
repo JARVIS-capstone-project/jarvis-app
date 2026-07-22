@@ -53,6 +53,23 @@ export function useHydrateSession(sessionId: string | null | undefined): void {
         if (now && now.messages.length > 0) return
 
         const messages: ChatMessage[] = detail.messages.map(fromMessageDto)
+        // Interrupted-turn synthesis: if the persisted tail is a user with
+        // no assistant reply, the previous stream was cut off. Append a
+        // client-only dim "The process was interrupted." marker so the
+        // messages list carries the status inline (MessageBubble renders
+        // it dim/italic). Never sent to the BE; re-synthesised on every
+        // hydration. `send()` / `resume()` strip it before appending new
+        // messages so it doesn't linger mid-list.
+        const tail = messages[messages.length - 1]
+        if (tail?.role === 'user') {
+          messages.push({
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: 'The process was interrupted.',
+            createdAt: tail.createdAt + 1,
+            interrupted: true,
+          })
+        }
         useChatSessionStore.getState().setMessages(sessionId, messages)
       } catch (err) {
         if (cancelled) return

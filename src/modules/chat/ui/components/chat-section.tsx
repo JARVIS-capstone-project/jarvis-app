@@ -4,7 +4,10 @@ import { ChatInput } from '@modules/chat/ui/components/chat-input'
 import { ChatMessages } from '@modules/chat/ui/components/chat-messages'
 import { MessageSkeleton } from '@modules/chat/ui/components/message-skeleton'
 import { WelcomeHero } from '@modules/chat/ui/components/welcome-hero'
-import { useChatSession } from '@modules/chat/model/chat-session-store'
+import {
+  PRE_SESSION_KEY,
+  useChatSession,
+} from '@modules/chat/model/chat-session-store'
 
 /**
  * Container for the right-hand chat pane. Three visual states keyed off the
@@ -35,10 +38,19 @@ interface ChatSectionProps {
 
 export function ChatSection({ onExpandSidebar }: ChatSectionProps = {}) {
   const { sessionId } = useParams<{ sessionId?: string }>()
-  const { messages, hydrating, streaming } = useChatSession(sessionId ?? null)
+  // Fall back to PRE_SESSION_KEY on /new so the pre-session seed (user +
+  // Thinking bubble that useChatSend appends the moment Send is pressed)
+  // is visible BEFORE /sessions returns — that's the whole point of early-
+  // seeding. Once /sessions succeeds, useChatSend migrates PRE_SESSION_KEY
+  // to the real sid and navigates, so this fallback stops being read.
+  const { messages, hydrating, streaming } = useChatSession(
+    sessionId ?? PRE_SESSION_KEY,
+  )
 
   // Welcome only on /new AND when no messages exist. Session URLs never
   // show the welcome hero — either they're hydrating (skeleton) or loaded.
+  // The moment the user hits Send on /new, the pre-session seed populates
+  // `messages`, so the welcome hero swaps out for the message list.
   const showWelcome = !sessionId && messages.length === 0
 
   return (

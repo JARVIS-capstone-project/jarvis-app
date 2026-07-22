@@ -82,6 +82,15 @@ export function MessageBubble({ message, isThinking = false }: MessageBubbleProp
             <div className="whitespace-pre-wrap wrap-break-word">
               {message.content}
             </div>
+          ) : message.interrupted ? (
+            // Synthetic "The process was interrupted." marker — client-only
+            // status label written by useHydrateSession when the persisted
+            // tail is a bare user message. Dim + italic so it reads as a
+            // notice, not an answer. The Retry action lives in the composer
+            // banner above (see chat-input.tsx isInterrupted branch).
+            <div className="italic text-muted wrap-break-word">
+              {message.content}
+            </div>
           ) : (
             // Assistant response — agent-system emits markdown; render it
             // with token-styled elements. Safe from LLM prompt injection:
