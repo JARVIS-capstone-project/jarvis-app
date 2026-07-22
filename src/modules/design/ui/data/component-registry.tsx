@@ -10,6 +10,8 @@ import { Badge } from '@shared/ui/badge'
 import type { BadgeVariant } from '@shared/ui/badge'
 import { Switch } from '@shared/ui/switch'
 import { Card } from '@shared/ui/card'
+import { Spinner } from '@shared/ui/spinner'
+import type { SpinnerSize, SpinnerTone } from '@shared/ui/spinner'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@shared/ui/accordion'
 import { ChatSection } from '@modules/chat/ui/components/chat-section'
 import { SessionHistory } from '@modules/chat/ui/components/session-history'
@@ -243,6 +245,24 @@ export const componentRegistry: ComponentDemo[] = [
           </AccordionItem>
         </Accordion>
       </div>
+    ),
+  },
+  {
+    name: 'Spinner',
+    description:
+      'Generic loading indicator. Use for buttons, sidebar rows, modal placeholders. For content with a strong layout shape (message lists, tables), prefer a skeleton.',
+    controls: [
+      { type: 'select', prop: 'size', options: ['sm', 'md', 'lg'] },
+      { type: 'select', prop: 'tone', options: ['brand', 'muted', 'inverse'] },
+      { type: 'text', prop: 'label', placeholder: '(icon-only)' },
+    ],
+    defaultProps: { size: 'md', tone: 'brand', label: 'Loading…' },
+    render: (p) => (
+      <Spinner
+        size={p.size as SpinnerSize}
+        tone={p.tone as SpinnerTone}
+        label={str(p.label)}
+      />
     ),
   },
 ]

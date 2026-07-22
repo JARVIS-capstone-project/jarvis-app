@@ -1,5 +1,6 @@
 import { env } from '@shared/config/env'
 import { useAuthStore } from '@modules/auth/model/auth-store'
+import { refreshAccessToken } from '@modules/auth/model/refresh-access-token'
 
 type QueryParams = Record<string, string | number | boolean | undefined>
 
@@ -8,7 +9,15 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
   body?: unknown
 }
 
-async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+/**
+ * Build the fetch request with the CURRENT access token from auth-store.
+ * Split out from `request()` so we can call it twice on the retry-on-401
+ * path (once with the old token, once with the refreshed one).
+ */
+function buildRequest(
+  path: string,
+  options: RequestOptions,
+): { url: URL; init: RequestInit } {
   const { params, body, headers, ...rest } = options
   const url = new URL(`${env.apiBaseUrl}${path}`, window.location.origin)
 
@@ -18,27 +27,48 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     }
   }
 
-  // Attach the access token (if any) on EVERY call — protected endpoints
-  // require it and public endpoints ignore it, so unconditional attach is safe
-  // and removes the "did I remember to add the header?" foot-gun for callers.
   const accessToken = useAuthStore.getState().accessToken
-  const authHeader: HeadersInit = accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
+  const authHeader: HeadersInit = accessToken
+    ? { Authorization: `Bearer ${accessToken}` }
+    : {}
 
-  // FormData bodies (file upload, multipart) must NOT be JSON.stringify'd and
-  // must NOT carry a Content-Type header — the browser sets multipart/form-data
-  // with the correct boundary automatically. Otherwise, default to JSON.
   const isFormData = body instanceof FormData
   const contentTypeHeader: HeadersInit =
     body !== undefined && !isFormData ? { 'Content-Type': 'application/json' } : {}
 
-  const response = await fetch(url, {
-    ...rest,
-    // credentials: 'include' so the HttpOnly refresh cookie set by the BE on
-    // login travels back on /api/auth/refresh (silent refresh — later ticket).
-    credentials: 'include',
-    headers: { ...contentTypeHeader, ...authHeader, ...headers },
-    body: isFormData ? (body as FormData) : body !== undefined ? JSON.stringify(body) : undefined,
-  })
+  return {
+    url,
+    init: {
+      ...rest,
+      // credentials: 'include' so the HttpOnly refresh cookie set by the BE
+      // on login travels back on /api/auth/refresh (silent refresh).
+      credentials: 'include',
+      headers: { ...contentTypeHeader, ...authHeader, ...headers },
+      body: isFormData
+        ? (body as FormData)
+        : body !== undefined
+          ? JSON.stringify(body)
+          : undefined,
+    },
+  }
+}
+
+async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  let { url, init } = buildRequest(path, options)
+  let response = await fetch(url, init)
+
+  // Retry-on-401: try refresh, then replay ONCE. Skip for the refresh
+  // endpoint itself to avoid infinite loops if refresh returns 401.
+  if (response.status === 401 && !path.startsWith('/auth/refresh')) {
+    const newToken = await refreshAccessToken()
+    if (newToken) {
+      // Rebuild — buildRequest reads the just-updated token from auth-store.
+      ;({ url, init } = buildRequest(path, options))
+      response = await fetch(url, init)
+    }
+    // If newToken is null, refreshAccessToken already redirected to /login —
+    // the throw below still fires and the caller sees the 401. Fine.
+  }
 
   if (!response.ok) {
     throw new Error(`Request failed: ${response.status} ${response.statusText}`)

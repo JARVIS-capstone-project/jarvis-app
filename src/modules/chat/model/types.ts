@@ -37,8 +37,16 @@ export interface ChatMessage {
   content: string
   /** Unix ms — set at append time via Date.now(). */
   createdAt: number
-  /** Files the user attached to this send. Omitted when empty. */
-  attachments?: ChatAttachment[]
+  /**
+   * Files the user attached to this send. Two flavours:
+   *   - `ChatAttachment` — live (this session), carries a `File` + blob URL.
+   *     Message-bubble renders it via `AttachmentTile`.
+   *   - `UploadedDocument` — hydrated from BE (`GET /sessions/{id}`); has
+   *     no local `File`. Message-bubble renders it via `StoredAttachmentTile`,
+   *     which resolves preview via IndexedDB → BE signed URL.
+   * The two are distinguishable by the presence of the `file` property.
+   */
+  attachments?: (ChatAttachment | UploadedDocument)[]
 }
 
 /**

@@ -1,40 +1,55 @@
+import { useEffect } from 'react'
+import { NavLink } from 'react-router'
 import { ArrowDownWideNarrow } from 'lucide-react'
+import { agentService } from '@modules/chat/api/agent-service'
+import {
+  useSessions,
+  useSessionsLoading,
+  useSessionsStore,
+} from '@modules/chat/model/sessions-store'
+import { cn } from '@shared/lib/cn'
 
 /**
- * A single previously-opened chat thread. Real data lands with the
- * sessions/threads API — this shape and the mock list below stand in
- * for now.
+ * "Recent" chat list rendered inside the sidebar. Hydrates from
+ * `GET /agent/sessions` on mount and reads from `sessions-store` on every
+ * render — so newly-created sessions (added optimistically by
+ * `useChatSend`) appear immediately.
+ *
+ * Titles single-line truncate with a full-text `title` tooltip. Sort icon
+ * is a visual-only placeholder — real sort ships alongside search later.
  */
-export interface ChatSession {
-  id: string
-  title: string
-}
+export function SessionHistory() {
+  const sessions = useSessions()
+  const loading = useSessionsLoading()
+  const setAll = useSessionsStore((s) => s.setAll)
+  const setLoading = useSessionsStore((s) => s.setLoading)
 
-const MOCK_SESSIONS: ChatSession[] = [
-  { id: 's1', title: 'User not receive the OTP after registration' },
-  { id: 's2', title: 'Payment incident on IOS build' },
-  { id: 's3', title: 'Payment incident on IOS - retry' },
-  { id: 's4', title: 'Knowledge base processing failure' },
-]
+  // Fetch-once-on-mount. Failures leave the list empty; a global 401
+  // handler will land in a later ticket.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setLoading(true)
+      try {
+        const list = await agentService.listSessions()
+        if (!cancelled) setAll(list)
+      } catch {
+        // Swallow — banner-less UX. Sidebar just stays empty on failure.
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [setAll, setLoading])
 
-interface SessionHistoryProps {
-  /** Override the list; defaults to a design mock until the API is wired. */
-  sessions?: ChatSession[]
-  /** Callback when a session row is clicked. Ignored while there's no real
-   *  session route. */
-  onSelect?: (id: string) => void
-}
-
-/**
- * "Recent" chat list rendered inside the sidebar. Titles single-line
- * truncate with a full-text `title` tooltip. Sort icon is a visual-only
- * placeholder — the actual sort control ships with the sessions API.
- */
-export function SessionHistory({ sessions = MOCK_SESSIONS, onSelect }: SessionHistoryProps) {
   return (
     <div className="flex min-h-0 flex-col gap-2">
       <div className="flex items-center justify-between px-3">
-        <span className="text-xs font-medium uppercase tracking-wider text-muted">Recent</span>
+        <span className="text-xs font-medium uppercase tracking-wider text-muted">
+          Recent
+        </span>
         <button
           type="button"
           aria-label="Sort recent sessions (coming soon)"
@@ -45,16 +60,28 @@ export function SessionHistory({ sessions = MOCK_SESSIONS, onSelect }: SessionHi
         </button>
       </div>
       <ul className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        {loading && sessions.length === 0 && (
+          <li className="px-3 py-2 text-sm text-muted">Loading…</li>
+        )}
+        {!loading && sessions.length === 0 && (
+          <li className="px-3 py-2 text-sm text-muted">No sessions yet</li>
+        )}
         {sessions.map((s) => (
-          <li key={s.id}>
-            <button
-              type="button"
-              onClick={() => onSelect?.(s.id)}
+          <li key={s.session_id}>
+            <NavLink
+              to={`/chat/${s.session_id}`}
               title={s.title}
-              className="block w-full truncate rounded-md px-3 py-2 text-left text-sm text-heading transition-colors hover:bg-hover"
+              className={({ isActive }) =>
+                cn(
+                  'block w-full truncate rounded-md px-3 py-2 text-left text-sm transition-colors',
+                  isActive
+                    ? 'bg-hover text-heading'
+                    : 'text-heading hover:bg-hover',
+                )
+              }
             >
               {s.title}
-            </button>
+            </NavLink>
           </li>
         ))}
       </ul>
