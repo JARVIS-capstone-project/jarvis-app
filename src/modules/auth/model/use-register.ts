@@ -1,44 +1,39 @@
 import { useCallback, useState } from 'react'
 import { authService } from '@modules/auth/api/auth-service'
-import type { LoginSession, RegisterCredentials } from '@modules/auth/api/auth-service'
-import { useAuthStore } from '@modules/auth/model/auth-store'
+import type { RegisterCredentials, RegisterResponse } from '@modules/auth/api/auth-service'
 
 interface UseRegisterState {
   isSubmitting: boolean
   error: string | null
-  session: LoginSession | null
+  result: RegisterResponse | null
 }
 
 interface UseRegisterResult extends UseRegisterState {
-  /** Attempts registration; resolves to the session on success, or null on failure. */
-  submit: (credentials: RegisterCredentials) => Promise<LoginSession | null>
+  /** Attempts registration; resolves to the response on success, or null on failure. */
+  submit: (credentials: RegisterCredentials) => Promise<RegisterResponse | null>
   /** Clears the last error — call when the user edits a field. */
   clearError: () => void
 }
 
 /**
- * Register state machine. Mirrors useLogin — owns submission + error surface
- * only, form component owns field state so uncontrolled inputs stay
- * uncontrolled. On success, pushes the session into the auth store BEFORE
- * resolving so guards see it and downstream navigation lands on a protected
- * route without a flash of /login.
+ * Register state machine. The BE now returns { status: "pending", email } with
+ * NO session tokens — the user must click the verify link before logging in —
+ * so this hook NO LONGER touches the auth store. On success the caller should
+ * navigate to /verify-email/sent (see RegisterForm).
  */
 export function useRegister(): UseRegisterResult {
   const [state, setState] = useState<UseRegisterState>({
     isSubmitting: false,
     error: null,
-    session: null,
+    result: null,
   })
 
   const submit = useCallback(async (credentials: RegisterCredentials) => {
     setState((prev) => ({ ...prev, isSubmitting: true, error: null }))
     try {
-      const session = await authService.register(credentials)
-      // Only accessToken goes into memory. refreshToken lives in an HttpOnly
-      // cookie set by the same response — never touched here.
-      useAuthStore.getState().setSession(session.accessToken)
-      setState({ isSubmitting: false, error: null, session })
-      return session
+      const result = await authService.register(credentials)
+      setState({ isSubmitting: false, error: null, result })
+      return result
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unable to register. Please try again.'
       setState((prev) => ({ ...prev, isSubmitting: false, error: message }))

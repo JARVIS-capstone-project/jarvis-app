@@ -53,6 +53,29 @@ function buildRequest(
   }
 }
 
+/**
+ * Structured error thrown for non-2xx responses. The `message` string is kept
+ * in the legacy `Request failed: {status} {statusText}` shape so existing
+ * `err.message.includes('401')` guards continue to work; new callers that
+ * need a specific behavior (e.g. login → email_not_verified) should switch
+ * on `err.code` instead.
+ */
+export class HttpApiError extends Error {
+  readonly status: number
+  /** BE's `error` field from the ApiError body, e.g. "email_not_verified". Null if the body wasn't JSON. */
+  readonly code: string | null
+  /** BE's `message` field from the ApiError body — human-readable detail. Null if the body wasn't JSON. */
+  readonly detail: string | null
+
+  constructor(status: number, statusText: string, code: string | null, detail: string | null) {
+    super(`Request failed: ${status} ${statusText}`)
+    this.name = 'HttpApiError'
+    this.status = status
+    this.code = code
+    this.detail = detail
+  }
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   let { url, init } = buildRequest(path, options)
   let response = await fetch(url, init)
@@ -71,7 +94,19 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status} ${response.statusText}`)
+    // Peek at the body for the BE's ApiError shape (error + message). Best-effort:
+    // network hiccups / non-JSON bodies just leave `code` + `detail` null and the
+    // legacy message format takes over.
+    let code: string | null = null
+    let detail: string | null = null
+    try {
+      const body = (await response.clone().json()) as { error?: string; message?: string }
+      code = body.error ?? null
+      detail = body.message ?? null
+    } catch {
+      // ignore — not a JSON body
+    }
+    throw new HttpApiError(response.status, response.statusText, code, detail)
   }
 
   // 204 No Content has no body to parse.

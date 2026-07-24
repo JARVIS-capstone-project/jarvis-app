@@ -3,11 +3,12 @@ import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { motion } from 'framer-motion'
 import type { Variants } from 'framer-motion'
-import { ArrowRight, Fingerprint, Lock, Mail } from 'lucide-react'
+import { ArrowRight, Fingerprint, Lock, Mail, MailCheck, RotateCw } from 'lucide-react'
 import { BrandMark } from '@shared/ui/brand-mark'
 import { Button } from '@shared/ui/button'
 import { Input } from '@shared/ui/input'
 import { useLogin } from '@modules/auth/model/use-login'
+import { useResendVerification } from '@modules/auth/model/use-resend-verification'
 
 // Container drives the reveal: waits 0.4s after mount (letting the HUD + reactor
 // settle first), then reveals each child 0.08s apart. Total sequence ~1.2s.
@@ -37,10 +38,25 @@ const itemVariants: Variants = {
  */
 export function LoginForm() {
   const navigate = useNavigate()
-  const { submit, isSubmitting, error, clearError } = useLogin()
+  const { submit, isSubmitting, error, errorCode, clearError } = useLogin()
+  const {
+    status: resendStatus,
+    errorMessage: resendError,
+    resend,
+    reset: resetResend,
+  } = useResendVerification()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(true)
+
+  // BE gates login on a pending account with 403 email_not_verified — swap the
+  // generic error banner for a specialised "verify your email + resend" banner.
+  const needsVerification = errorCode === 'email_not_verified'
+
+  const clearAllErrors = () => {
+    clearError()
+    resetResend()
+  }
 
   // Already-authed short-circuit lives at the route level (<RedirectIfAuthed>
   // in modules/auth/routes.tsx) — no in-form effect needed.
@@ -97,8 +113,53 @@ export function LoginForm() {
 
       {/* Global error surface — sits above fields so it's the first thing read.
           Not staggered: mounts/unmounts with its own quick fade so state changes
-          don't wait on the intro sequence. */}
-      {error && (
+          don't wait on the intro sequence.
+
+          Two variants:
+            - email_not_verified → warning banner + Resend button. Uses the
+              typed email as the resend target (safe: BE anti-enumeration).
+            - anything else → generic red danger banner. */}
+      {needsVerification ? (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          role="alert"
+          className="space-y-3 rounded-md border border-warning/40 bg-warning/10 px-3 py-3 text-xs text-warning"
+        >
+          <div className="flex items-start gap-2">
+            <MailCheck className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            <div className="space-y-1">
+              <p className="font-medium text-warning">Verify your email to continue.</p>
+              <p className="text-warning/80">
+                We sent a verification link when you registered. Click it, then log in again.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:items-center">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => void resend(email)}
+              disabled={!email || resendStatus === 'sending' || resendStatus === 'sent'}
+              isLoading={resendStatus === 'sending'}
+              leftIcon={
+                resendStatus === 'sending' ? undefined : (
+                  <RotateCw className="size-3.5" aria-hidden="true" />
+                )
+              }
+              className="sm:w-auto"
+            >
+              {resendStatus === 'sent' ? 'Sent — check your inbox' : 'Resend verification email'}
+            </Button>
+            {resendStatus === 'error' && resendError && (
+              <span className="text-danger">{resendError}</span>
+            )}
+          </div>
+        </motion.div>
+      ) : error ? (
         <motion.div
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
@@ -110,7 +171,7 @@ export function LoginForm() {
           <span className="mt-0.5 inline-block size-1.5 shrink-0 rounded-full bg-danger" />
           {error}
         </motion.div>
-      )}
+      ) : null}
 
       <motion.div variants={itemVariants}>
         <Input
@@ -121,7 +182,7 @@ export function LoginForm() {
           value={email}
           onChange={(e) => {
             setEmail(e.target.value)
-            clearError()
+            clearAllErrors()
           }}
           leftIcon={<Mail className="size-4" />}
           required
@@ -148,7 +209,7 @@ export function LoginForm() {
           value={password}
           onChange={(e) => {
             setPassword(e.target.value)
-            clearError()
+            clearAllErrors()
           }}
           leftIcon={<Lock className="size-4" />}
           required
