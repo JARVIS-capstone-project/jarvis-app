@@ -1,11 +1,10 @@
 import type { ReactNode } from 'react'
-import { Moon, PanelLeftClose, Settings, Sun } from 'lucide-react'
+import { PanelLeftClose } from 'lucide-react'
 import { SidebarUser } from '@app/layout/sidebar-user'
 import { useSidebarShell } from '@app/layout/use-sidebar-shell'
 import { SessionHistory } from '@modules/chat/ui/components/session-history'
 import { BrandMark } from '@shared/ui/brand-mark'
 import { ItemButton } from '@shared/ui/item-button'
-import { Switch } from '@shared/ui/switch'
 
 interface SidebarProps {
   /** When provided, a close button appears in the header. Consumed by the
@@ -19,7 +18,7 @@ interface SidebarProps {
  * so this component always renders full-width when mounted.
  */
 export function Sidebar({ onClose }: SidebarProps) {
-  const { features, isDarkMode, onToggleTheme } = useSidebarShell()
+  const { features } = useSidebarShell()
 
   return (
     // Below md: fixed overlay drawer (z-50, sits over the chat).
@@ -62,19 +61,6 @@ export function Sidebar({ onClose }: SidebarProps) {
       </div>
 
       <div className="flex flex-col gap-1">
-        <ItemButton
-          leftIcon={<Settings className="size-5" />}
-          title="Settings — coming soon"
-        >
-          Setting
-        </ItemButton>
-        <div className="flex h-11 items-center gap-3 px-3">
-          <span className="flex shrink-0 text-muted">
-            {isDarkMode ? <Moon className="size-5" /> : <Sun className="size-5" />}
-          </span>
-          <span className="flex-1 text-sm font-medium text-body">Darkmode</span>
-          <Switch checked={isDarkMode} onCheckedChange={onToggleTheme} />
-        </div>
         <SidebarUser />
       </div>
     </aside>
