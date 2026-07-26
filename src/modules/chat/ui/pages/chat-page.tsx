@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { useParams } from 'react-router'
 import { Sidebar } from '@app/layout/sidebar'
+import { useHydrateSession } from '@modules/chat/model/use-hydrate-session'
 import { ChatSection } from '@modules/chat/ui/components/chat-section'
 import { cn } from '@shared/lib/cn'
 
@@ -17,6 +19,13 @@ import { cn } from '@shared/lib/cn'
  * rotating a phone doesn't clobber the user's choice.
  */
 export function ChatPage() {
+  // Hydrate `chat-session-store` from `GET /sessions/{id}` on mount when
+  // the URL carries a session_id (deep-link, refresh, sidebar click).
+  // No-op on `/new`. Guards against clobbering an active stream and skips
+  // if the store already has messages for this id.
+  const { sessionId } = useParams<{ sessionId?: string }>()
+  useHydrateSession(sessionId)
+
   const [sidebarOpen, setSidebarOpen] = useState(
     () => window.matchMedia('(min-width: 768px)').matches,
   )

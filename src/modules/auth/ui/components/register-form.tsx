@@ -69,8 +69,14 @@ export function RegisterForm() {
       setClientError('You must accept the terms & conditions.')
       return
     }
-    const session = await submit({ email, password })
-    if (session) navigate('/new', { replace: true })
+    const result = await submit({ email, password })
+    // BE returns { status: 'pending', email } and NO session — new accounts
+    // must click the verify link before they can log in. Send the user to the
+    // "check your inbox" page with their email in router state so the page can
+    // echo it back + power the Resend button. Never touch the auth store here.
+    if (result) {
+      navigate('/verify-email/sent', { replace: true, state: { email: result.email } })
+    }
   }
 
   return (

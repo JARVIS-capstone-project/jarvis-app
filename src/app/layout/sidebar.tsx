@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Moon, PanelLeftClose, Settings, Sun } from 'lucide-react'
+import { SidebarUser } from '@app/layout/sidebar-user'
 import { useSidebarShell } from '@app/layout/use-sidebar-shell'
 import { SessionHistory } from '@modules/chat/ui/components/session-history'
 import { BrandMark } from '@shared/ui/brand-mark'
@@ -74,6 +75,7 @@ export function Sidebar({ onClose }: SidebarProps) {
           <span className="flex-1 text-sm font-medium text-body">Darkmode</span>
           <Switch checked={isDarkMode} onCheckedChange={onToggleTheme} />
         </div>
+        <SidebarUser />
       </div>
     </aside>
   )

@@ -7,6 +7,7 @@ import { ArrowRight, Mail, MailQuestion } from 'lucide-react'
 import { BrandMark } from '@shared/ui/brand-mark'
 import { Button } from '@shared/ui/button'
 import { Input } from '@shared/ui/input'
+import { useRequestReset } from '@modules/auth/model/use-request-reset'
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
@@ -26,21 +27,23 @@ const itemVariants: Variants = {
 }
 
 /**
- * The /forgot-password card. Email input + submit — UI-only for now.
- * Submitting navigates to /forgot-password/sent as if the reset request went
- * through. The BE endpoint (POST /auth/reset) responds identically for
- * existing vs. missing emails on purpose (enumeration-safe), so this UI
- * won't have to change when it gets wired later.
+ * The /forgot-password card. Email input + submit → POST /auth/reset. The BE
+ * responds identically for existing vs. missing emails on purpose
+ * (enumeration-safe), so a successful navigation to /forgot-password/sent
+ * is NEVER a confirmation that an email actually got dispatched.
  */
 export function ForgotPasswordForm() {
   const navigate = useNavigate()
+  const { status, errorMessage, request } = useRequestReset()
   const [email, setEmail] = useState('')
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    // No API call yet. Pass the email so the "sent" page can echo it back
-    // for reassurance, without leaking whether an account actually exists.
-    navigate('/forgot-password/sent', { replace: true, state: { email } })
+    const ok = await request(email)
+    // On BE 2xx (which is 200 whether the account exists or not), forward
+    // to the "check your inbox" screen and pass the email so it can be
+    // echoed back for reassurance.
+    if (ok) navigate('/forgot-password/sent', { replace: true, state: { email } })
   }
 
   return (
@@ -78,9 +81,21 @@ export function ForgotPasswordForm() {
       <motion.div variants={itemVariants} className="space-y-1 text-center">
         <h1 className="font-display text-3xl text-heading">Reset your credentials.</h1>
         <p className="text-sm text-muted">
-          Enter your email and we'll send a link to reset your password.
+          Enter the email you used to register and we'll send a link to reset your password.
         </p>
       </motion.div>
+
+      {status === 'error' && errorMessage && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          role="alert"
+          className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger-soft px-3 py-2 text-xs text-danger"
+        >
+          <span className="mt-0.5 inline-block size-1.5 shrink-0 rounded-full bg-danger" />
+          {errorMessage}
+        </motion.div>
+      )}
 
       <motion.div variants={itemVariants}>
         <Input
@@ -100,10 +115,11 @@ export function ForgotPasswordForm() {
           type="submit"
           variant="primary"
           size="lg"
-          rightIcon={<ArrowRight className="size-4" />}
+          isLoading={status === 'sending'}
+          rightIcon={status === 'sending' ? undefined : <ArrowRight className="size-4" />}
           className="w-full"
         >
-          Send reset link
+          {status === 'sending' ? 'Sending' : 'Send reset link'}
         </Button>
       </motion.div>
 

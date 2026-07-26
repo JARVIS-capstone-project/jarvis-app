@@ -1,16 +1,20 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
-import { ArrowUp, AudioLines, Loader2, Plus } from 'lucide-react'
+import { useParams } from 'react-router'
+import { ArrowUp, AudioLines, Loader2, Plus, RotateCw } from 'lucide-react'
 import { AttachmentPreviewModal } from '@modules/chat/ui/components/attachment-preview-modal'
 import { AttachmentTile } from '@modules/chat/ui/components/attachment-tile'
 import { useComposerAttachments } from '@modules/chat/model/use-composer-attachments'
+import {
+  PRE_SESSION_KEY,
+  useChatSession,
+  useChatSessionStore,
+} from '@modules/chat/model/chat-session-store'
+import { useChatSend } from '@modules/chat/model/use-chat-send'
 import type { PreviewTarget } from '@modules/chat/model/use-document-preview'
-import { useUploadDocuments } from '@modules/chat/model/use-upload-documents'
-import type { ChatAttachment } from '@modules/chat/model/types'
 import { cn } from '@shared/lib/cn'
 
 interface ChatInputProps {
-  onSend: (content: string, attachments?: ChatAttachment[]) => void
   disabled?: boolean
 }
 
@@ -18,18 +22,36 @@ interface ChatInputProps {
  * Composer for the chat section. Enter submits, Shift+Enter inserts a
  * newline; the textarea auto-grows up to a capped height, then scrolls.
  *
- * Text is local (form state). Attachment state + blob URL lifecycle lives
- * in useComposerAttachments — this component just wires pick/remove/reset.
- * Send takes either text or files (or both); files migrate into the
- * created message and remain openable there. Voice is a placeholder.
+ * Owns text (form state) + attachment picking. All send/upload/stream
+ * plumbing lives in `useChatSend`. On any pipeline failure the composer
+ * restores from `chat-session-store.pendingPayload` and surfaces the
+ * "Error happened please try again" banner above itself.
  */
-export function ChatInput({ onSend, disabled }: ChatInputProps) {
+export function ChatInput({ disabled }: ChatInputProps) {
+  const { sessionId } = useParams<{ sessionId?: string }>()
+  // Pre-session errors park on a placeholder key — see chat-session-store.
+  const stateKey = sessionId ?? PRE_SESSION_KEY
+  const session = useChatSession(stateKey)
+
   const [value, setValue] = useState('')
   const [busy, setBusy] = useState(false)
+  const [resuming, setResuming] = useState(false)
   const [preview, setPreview] = useState<PreviewTarget | null>(null)
   const { attachments, pick, remove, reset, replaceAll } = useComposerAttachments()
-  const upload = useUploadDocuments()
+  const { send, resume } = useChatSend()
   const taRef = useRef<HTMLTextAreaElement>(null)
+
+  // Interrupted-turn detection: after hydration on refresh, if the last
+  // message is a user message with no assistant follow-up, the previous
+  // stream was cut off (page refresh / tab close). Offer a Retry that
+  // re-fires /stream with the stored user message.
+  const lastMessage = session.messages[session.messages.length - 1]
+  const isInterrupted = Boolean(
+    sessionId &&
+      lastMessage?.role === 'user' &&
+      !session.streaming &&
+      !session.hydrating,
+  )
 
   // Resize the textarea to fit content on every value change. Height is
   // reset to auto first so shrinking (after send/delete) works too.
@@ -40,41 +62,41 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
     el.style.height = `${el.scrollHeight}px`
   }, [value])
 
-  const canSend = (value.trim().length > 0 || attachments.length > 0) && !disabled && !busy
+  // RESTORE: subscribe to the store so a fresh `pendingPayload` drops back
+  // into the composer. Runs in a subscription callback (not directly in the
+  // effect body) — this is the "sync from external system" pattern React
+  // compiler's set-state-in-effect rule condones. Payload is nulled out
+  // immediately after restore so the callback doesn't re-fire on unrelated
+  // store updates. `errorBanner` is left alone — it stays visible until the
+  // NEXT successful Send clears it (see useChatSend).
+  useEffect(() => {
+    return useChatSessionStore.subscribe((state) => {
+      const cur = state.byId[stateKey]
+      if (!cur?.pendingPayload) return
+      setValue(cur.pendingPayload.text)
+      replaceAll(cur.pendingPayload.attachments)
+      useChatSessionStore.getState().setError(stateKey, cur.errorBanner, null)
+    })
+  }, [stateKey, replaceAll])
+
+  const canSend =
+    (value.trim().length > 0 || attachments.length > 0) && !disabled && !busy
 
   const submit = async () => {
     if (!canSend) return
-
-    // Fast path: no files → instant send, no upload machinery.
-    if (attachments.length === 0) {
-      onSend(value.trim())
-      setValue('')
-      return
-    }
-
-    // Blocking upload flow: fire N parallel POSTs, await all, then decide.
     setBusy(true)
-    // Flip pending → uploading so each tile shows the spinner overlay while
-    // the request is in flight. Already-uploaded (retry) tiles keep 'done'.
-    const uploading = attachments.map((a) =>
-      a.sourceId ? a : { ...a, uploadStatus: 'uploading' as const },
-    )
-    replaceAll(uploading)
     try {
-      const updated = await upload(uploading)
-      const anyFailed = updated.some((a) => a.uploadStatus === 'failed')
-      if (anyFailed) {
-        // Reflect statuses in composer so tiles show failed / done correctly.
-        // Do NOT send the message — user retries after seeing the failures.
-        replaceAll(updated)
-        return
+      await send({ text: value.trim(), attachments })
+      // Success is signaled by the absence of a NEW errorBanner. useChatSend
+      // clears the banner at the start of a fresh Send and only sets it on
+      // failure — so if it's null when we return, the send worked.
+      const banner = useChatSessionStore
+        .getState()
+        .byId[stateKey]?.errorBanner
+      if (!banner) {
+        setValue('')
+        reset()
       }
-      // All done → commit message with the enriched attachments (now carry
-      // sourceId + jobId) and clear composer. reset() drops state WITHOUT
-      // revoking blob URLs — the message bubble inherits them.
-      onSend(value.trim(), updated)
-      setValue('')
-      reset()
     } finally {
       setBusy(false)
     }
@@ -90,6 +112,43 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   return (
     <div className="px-6 pb-4 pt-2">
       <div className="mx-auto max-w-3xl">
+        {session.errorBanner && (
+          <div
+            role="alert"
+            className="mb-2 rounded-md border border-danger bg-danger/10 px-3 py-2 text-sm text-danger"
+          >
+            {session.errorBanner}
+          </div>
+        )}
+        {isInterrupted && !session.errorBanner && sessionId && (
+          <div
+            role="alert"
+            className="mb-2 flex items-center justify-between gap-3 rounded-md border border-warning bg-warning/10 px-3 py-2 text-sm text-warning"
+          >
+            <span>Previous response was interrupted.</span>
+            <button
+              type="button"
+              onClick={async () => {
+                if (resuming) return
+                setResuming(true)
+                try {
+                  await resume(sessionId)
+                } finally {
+                  setResuming(false)
+                }
+              }}
+              disabled={resuming}
+              className="inline-flex items-center gap-1.5 rounded-md border border-warning/50 px-2 py-1 text-xs font-medium transition-colors hover:bg-warning/20 disabled:cursor-wait"
+            >
+              {resuming ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <RotateCw className="size-3" />
+              )}
+              Retry
+            </button>
+          </div>
+        )}
         <div className="rounded-2xl bg-surface p-3">
           {attachments.length > 0 && (
             <div className="mb-3 flex flex-wrap gap-2">
@@ -98,7 +157,9 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
                   key={a.key}
                   attachment={a}
                   onRemove={() => remove(a.key)}
-                  onOpenPreview={() => setPreview({ kind: 'live', attachment: a })}
+                  onOpenPreview={() =>
+                    setPreview({ kind: 'live', attachment: a })
+                  }
                 />
               ))}
             </div>
@@ -108,7 +169,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={busy ? 'Uploading…' : 'Ask Anything.....'}
+            placeholder={busy ? 'Sending…' : 'Ask Anything.....'}
             rows={1}
             aria-label="Message"
             disabled={busy}
@@ -155,7 +216,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
                 type="button"
                 onClick={submit}
                 disabled={!canSend}
-                aria-label={busy ? 'Uploading' : 'Send message'}
+                aria-label={busy ? 'Sending' : 'Send message'}
                 aria-busy={busy}
                 className={cn(
                   'flex size-9 items-center justify-center rounded-lg transition-colors',

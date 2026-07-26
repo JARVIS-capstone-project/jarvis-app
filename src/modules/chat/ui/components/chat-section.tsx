@@ -1,20 +1,22 @@
 import { PanelLeftOpen } from 'lucide-react'
+import { useParams } from 'react-router'
 import { ChatInput } from '@modules/chat/ui/components/chat-input'
 import { ChatMessages } from '@modules/chat/ui/components/chat-messages'
+import { MessageSkeleton } from '@modules/chat/ui/components/message-skeleton'
 import { WelcomeHero } from '@modules/chat/ui/components/welcome-hero'
-import { useChatThread } from '@modules/chat/model/use-chat-thread'
+import { useChatSession } from '@modules/chat/model/chat-session-store'
 
 /**
- * Container for the right-hand chat pane. Owns nothing itself — pulls the
- * thread from useChatStore and delegates to hero/messages/input.
+ * Container for the right-hand chat pane. Three visual states keyed off the
+ * per-session store slice + route param:
  *
- * Rendering rule: when the thread is empty, the welcome hero fills the
- * space above the composer. As soon as the first message is appended,
- * the hero is unmounted and the scrollable message list takes over.
- *
- * The section is `h-full` so a parent layout (page/sidebar shell) controls
- * width — collapsing the sidebar simply gives this component more room,
- * no responsive logic needed here.
+ *   1. Welcome  — no sessionId (route is `/new`) AND no messages yet.
+ *                 Hero + centered composer.
+ *   2. Loading  — sessionId in URL, `hydrating: true`. Skeleton bubbles at
+ *                 the top, composer already docked at the bottom so the
+ *                 user can start typing while it loads (no layout jump when
+ *                 real messages arrive).
+ *   3. Loaded   — messages present. Real message list + composer at bottom.
  */
 // Two soft brand-orange radial glows — a bigger one anchored to the top-right,
 // a smaller accent to the bottom-left. Uses --brand-glow-* tokens so the
@@ -32,7 +34,12 @@ interface ChatSectionProps {
 }
 
 export function ChatSection({ onExpandSidebar }: ChatSectionProps = {}) {
-  const { messages, isEmpty, send } = useChatThread()
+  const { sessionId } = useParams<{ sessionId?: string }>()
+  const { messages, hydrating, streaming } = useChatSession(sessionId ?? null)
+
+  // Welcome only on /new AND when no messages exist. Session URLs never
+  // show the welcome hero — either they're hydrating (skeleton) or loaded.
+  const showWelcome = !sessionId && messages.length === 0
 
   return (
     <div
@@ -51,19 +58,24 @@ export function ChatSection({ onExpandSidebar }: ChatSectionProps = {}) {
           </button>
         </div>
       )}
-      {isEmpty ? (
-        // Empty state: hero + composer are one centered group, so the
-        // composer sits directly under the greeting instead of being
-        // pinned to the bottom.
+      {showWelcome ? (
+        // Welcome: hero + composer centered as one group.
         <div className="flex flex-1 flex-col justify-center gap-6">
           <WelcomeHero />
-          <ChatInput onSend={send} />
+          <ChatInput />
         </div>
       ) : (
-        // Active thread: messages fill the top, composer pinned to bottom.
+        // Loading OR loaded: top area fills, composer pinned to bottom.
+        // Skeleton renders when hydrating AND we don't yet have messages —
+        // once a message array lands (even mid-hydrate, from a race), the
+        // real ChatMessages takes over so we never double-render.
         <>
-          <ChatMessages messages={messages} />
-          <ChatInput onSend={send} />
+          {hydrating && messages.length === 0 ? (
+            <MessageSkeleton />
+          ) : (
+            <ChatMessages messages={messages} streaming={streaming} />
+          )}
+          <ChatInput />
         </>
       )}
     </div>

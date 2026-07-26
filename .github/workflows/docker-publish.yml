@@ -1,10 +1,10 @@
 name: Docker Publish
 
+# Manual-only. Production deploys go to Cloud Run + Artifact Registry (see
+# capstone-completion-plan.md Section 3, Sprint 6), so pushes/tags should not
+# auto-publish to GHCR. Kept in-tree in case we ever want to fire it by hand
+# from the Actions tab.
 on:
-  push:
-    branches: [main]
-    tags: ["v*"]
-  pull_request:
   workflow_dispatch:
 
 env:
