@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { useParams } from 'react-router'
-import { ArrowUp, AudioLines, Loader2, Plus, RotateCw } from 'lucide-react'
+import { ArrowUp, AudioLines, Loader2, Plus, RotateCw, Square } from 'lucide-react'
 import { AttachmentPreviewModal } from '@modules/chat/ui/components/attachment-preview-modal'
 import { AttachmentTile } from '@modules/chat/ui/components/attachment-tile'
 import { useComposerAttachments } from '@modules/chat/model/use-composer-attachments'
@@ -38,8 +38,13 @@ export function ChatInput({ disabled }: ChatInputProps) {
   const [resuming, setResuming] = useState(false)
   const [preview, setPreview] = useState<PreviewTarget | null>(null)
   const { attachments, pick, remove, reset, replaceAll } = useComposerAttachments()
-  const { send, resume } = useChatSend()
+  const { send, resume, abort } = useChatSend()
   const taRef = useRef<HTMLTextAreaElement>(null)
+
+  // Drives the Send↔Stop toggle. `session.streaming` flips true the moment
+  // /stream is opened in useChatSend and false when the stream ends
+  // (turn_end, error, or user abort — see use-sse-stream.ts).
+  const isStreaming = session.streaming
 
   // Interrupted-turn detection: after hydration on refresh, if the last
   // message is a user message with no assistant follow-up, the previous
@@ -84,19 +89,16 @@ export function ChatInput({ disabled }: ChatInputProps) {
 
   const submit = async () => {
     if (!canSend) return
+    // Snapshot BEFORE clearing so the pipeline sees the payload the user
+    // typed, not an empty composer. useChatSend's pendingPayload restore
+    // path re-populates the composer on failure — so clearing immediately
+    // is safe and gives the user instant "message sent" feedback.
+    const snapshot = { text: value.trim(), attachments }
+    setValue('')
+    reset()
     setBusy(true)
     try {
-      await send({ text: value.trim(), attachments })
-      // Success is signaled by the absence of a NEW errorBanner. useChatSend
-      // clears the banner at the start of a fresh Send and only sets it on
-      // failure — so if it's null when we return, the send worked.
-      const banner = useChatSessionStore
-        .getState()
-        .byId[stateKey]?.errorBanner
-      if (!banner) {
-        setValue('')
-        reset()
-      }
+      await send(snapshot)
     } finally {
       setBusy(false)
     }
@@ -212,27 +214,43 @@ export function ChatInput({ disabled }: ChatInputProps) {
               >
                 <AudioLines className="size-4" />
               </button>
-              <button
-                type="button"
-                onClick={submit}
-                disabled={!canSend}
-                aria-label={busy ? 'Sending' : 'Send message'}
-                aria-busy={busy}
-                className={cn(
-                  'flex size-9 items-center justify-center rounded-lg transition-colors',
-                  canSend
-                    ? 'bg-brand text-white hover:bg-brand-hover'
-                    : busy
-                      ? 'bg-brand text-white'
-                      : 'cursor-not-allowed bg-surface text-muted',
-                )}
-              >
-                {busy ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <ArrowUp className="size-4" />
-                )}
-              </button>
+              {isStreaming ? (
+                // Streaming → button becomes Stop. Wired to useChatSend's
+                // abort() → useSseStream aborts the fetch → BE observes the
+                // socket close and applies its rollback contract
+                // (FE_HANDOFF §6). No error banner fires — abort is silent
+                // by design (see the `result.aborted` branch in useChatSend).
+                <button
+                  type="button"
+                  onClick={abort}
+                  aria-label="Stop generation"
+                  className="flex size-9 items-center justify-center rounded-lg bg-brand text-white transition-colors hover:bg-brand-hover"
+                >
+                  <Square className="size-4 fill-current" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={submit}
+                  disabled={!canSend}
+                  aria-label={busy ? 'Sending' : 'Send message'}
+                  aria-busy={busy}
+                  className={cn(
+                    'flex size-9 items-center justify-center rounded-lg transition-colors',
+                    canSend
+                      ? 'bg-brand text-white hover:bg-brand-hover'
+                      : busy
+                        ? 'bg-brand text-white'
+                        : 'cursor-not-allowed bg-surface text-muted',
+                  )}
+                >
+                  {busy ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <ArrowUp className="size-4" />
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>

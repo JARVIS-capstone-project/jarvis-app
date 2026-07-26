@@ -10,8 +10,14 @@ interface StreamHandlers {
    * Fires exactly once — on natural `turn_end`, network error, missing
    * `turn_end`, or user abort. Callers rely on this single fire to reset
    * their composer / streaming state. Never fires twice.
+   *
+   * When the failure was a user-initiated `abort()` (Stop button), the
+   * result carries `aborted:true` so callers can distinguish it from a
+   * genuine error and skip their retry / error-banner protocol.
    */
-  onDone: (result: { ok: true } | { ok: false; error: string }) => void
+  onDone: (
+    result: { ok: true } | { ok: false; error: string; aborted?: boolean },
+  ) => void
 }
 
 interface UseSseStreamResult {
@@ -57,7 +63,9 @@ export function useSseStream(): UseSseStreamResult {
       abortRef.current = controller
 
       let doneFired = false
-      const fireDone = (result: { ok: true } | { ok: false; error: string }) => {
+      const fireDone = (
+        result: { ok: true } | { ok: false; error: string; aborted?: boolean },
+      ) => {
         if (doneFired) return
         doneFired = true
         handlers.onDone(result)
@@ -86,13 +94,13 @@ export function useSseStream(): UseSseStreamResult {
             : { ok: false, error: 'Stream closed without turn_end' },
         )
       } catch (err) {
-        const msg =
-          err instanceof DOMException && err.name === 'AbortError'
-            ? 'Stream aborted'
-            : err instanceof Error
-              ? err.message
-              : 'Stream failed'
-        fireDone({ ok: false, error: msg })
+        const aborted = err instanceof DOMException && err.name === 'AbortError'
+        const msg = aborted
+          ? 'Stream aborted'
+          : err instanceof Error
+            ? err.message
+            : 'Stream failed'
+        fireDone({ ok: false, error: msg, ...(aborted && { aborted: true }) })
       } finally {
         // Clear the ref only if it still points at OUR controller (a newer
         // open() may have already replaced it).
