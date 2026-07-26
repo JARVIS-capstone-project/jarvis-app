@@ -85,6 +85,38 @@ export function useChatSend(): UseChatSendResult {
       let sid: string | null = priorSid
       let uploadedAttachments: ChatAttachment[] = snapshot.attachments
 
+      // (SEED) User bubble + empty assistant placeholder are appended IMMEDIATELY
+      // — before uploads / /sessions — so the message visibly commits the moment
+      // Send is pressed instead of appearing to hang inside the composer for the
+      // duration of the pre-stream work. When we don't yet have a sid (first
+      // message on /new), the seed lands under PRE_SESSION_KEY and is migrated
+      // to the real sid immediately after /sessions returns (see (3)).
+      const seedKey = sid ?? PRE_SESSION_KEY
+      store.ensure(seedKey)
+      // Drop any leftover synthetic "The process was interrupted." marker so
+      // a new turn doesn't stack on top of the previous interrupt notice.
+      store.removeTrailingInterrupted(seedKey)
+      const now = Date.now()
+      const userMsg: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: 'user',
+        content: snapshot.text,
+        createdAt: now,
+        attachments:
+          uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
+      }
+      const assistantMsg: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: '',
+        createdAt: now + 1,
+      }
+      store.appendMessage(seedKey, userMsg)
+      store.appendMessage(seedKey, assistantMsg)
+      // streaming=true here so ChatMessages renders the Thinking indicator on
+      // the empty assistant bubble even while /sessions is still round-tripping.
+      store.setStreaming(seedKey, true)
+
       try {
         // (2) UPLOADS. Existing hook — parallel Promise.allSettled internally.
         if (uploadedAttachments.length > 0) {
@@ -92,6 +124,9 @@ export function useChatSend(): UseChatSendResult {
           if (uploadedAttachments.some((a) => a.uploadStatus === 'failed')) {
             throw new Error('One or more uploads failed')
           }
+          // Swap the pending-status attachments seeded on the user bubble for
+          // the post-upload enriched shape so tiles flip pending → done.
+          store.patchMessageAttachments(seedKey, userMsg.id, uploadedAttachments)
         }
 
         // (3) SESSION. Only if we don't already have one.
@@ -104,29 +139,13 @@ export function useChatSend(): UseChatSendResult {
           sid = session.session_id
           cachedSessionIdRef.current = sid
           useSessionsStore.getState().addOptimistic(session)
+          // Promote the PRE_SESSION_KEY seed to the real sid BEFORE navigating
+          // so the router-triggered re-read finds messages under the new key
+          // — otherwise the just-navigated ChatSection reads an empty state
+          // for a frame and the bubbles flicker.
+          store.migrateSession(PRE_SESSION_KEY, sid)
           navigate(`/chat/${sid}`, { replace: true })
         }
-
-        // (3.5) Seed the UI: user message + empty assistant placeholder.
-        store.ensure(sid)
-        const now = Date.now()
-        const userMsg: ChatMessage = {
-          id: crypto.randomUUID(),
-          role: 'user',
-          content: snapshot.text,
-          createdAt: now,
-          attachments:
-            uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
-        }
-        const assistantMsg: ChatMessage = {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: '',
-          createdAt: now + 1,
-        }
-        store.appendMessage(sid, userMsg)
-        store.appendMessage(sid, assistantMsg)
-        store.setStreaming(sid, true)
 
         // (4) STREAM.
         const attachmentsIn: AttachmentIn[] = uploadedAttachments
@@ -183,6 +202,17 @@ export function useChatSend(): UseChatSendResult {
       } catch (err) {
         // RETRY protocol.
         const key = sid ?? PRE_SESSION_KEY
+        // Rollback the pre-session seed: the user's message never made it to
+        // the BE (upload / /sessions failure), so retaining the phantom user
+        // bubble would confuse the retry (a subsequent successful Send would
+        // append a SECOND user bubble on top of the orphaned one). Once sid
+        // is set the bubbles KEEP existing — those represent an in-progress
+        // turn the BE already persisted (interrupted-turn semantics; the
+        // Retry banner + resume() take over).
+        if (!sid) {
+          store.setMessages(PRE_SESSION_KEY, [])
+          store.setStreaming(PRE_SESSION_KEY, false)
+        }
         // Ensure the slot exists so setError doesn't lose the banner.
         store.ensure(key)
         store.setError(key, ERROR_BANNER, {
@@ -223,7 +253,12 @@ export function useChatSend(): UseChatSendResult {
       const cur = store.byId[sessionId]
       if (!cur || cur.streaming || cur.hydrating) return
 
-      const last = cur.messages[cur.messages.length - 1]
+      // Skip over the synthetic "The process was interrupted." marker
+      // (if useHydrateSession appended one) so we still find the ORIGINAL
+      // user message we need to re-fire.
+      const tailIdx = cur.messages.length - 1
+      const skipInterrupted = cur.messages[tailIdx]?.interrupted ? 1 : 0
+      const last = cur.messages[tailIdx - skipInterrupted]
       if (!last || last.role !== 'user') return
 
       // Pull the wire-shape attachments from stored ChatMessage attachments.
@@ -255,6 +290,11 @@ export function useChatSend(): UseChatSendResult {
         .filter((a): a is AttachmentIn => a !== null)
 
       const now = Date.now()
+      // Drop the synthetic interrupted marker (if any) BEFORE we append the
+      // real assistant placeholder — otherwise Retry would leave two
+      // assistant bubbles in a row: "The process was interrupted." and the
+      // fresh streaming one.
+      store.removeTrailingInterrupted(sessionId)
       store.appendMessage(sessionId, {
         id: crypto.randomUUID(),
         role: 'assistant',

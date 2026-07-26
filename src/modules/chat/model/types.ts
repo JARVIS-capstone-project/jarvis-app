@@ -45,6 +45,15 @@ export interface ChatMessage {
    */
   thinking?: string | null
   /**
+   * True when this message is a synthetic "The process was interrupted."
+   * marker written client-side after hydration detected the previous stream
+   * was cut off (last persisted message is a user with no assistant reply).
+   * Never persisted to the BE — `useHydrateSession` re-synthesises it on
+   * every hydration if the interrupted-state condition still holds. Rendered
+   * dim by `MessageBubble` so it reads as a status label, not an answer.
+   */
+  interrupted?: boolean
+  /**
    * Files the user attached to this send. Two flavours:
    *   - `ChatAttachment` — live (this session), carries a `File` + blob URL.
    *     Message-bubble renders it via `AttachmentTile`.

@@ -1,5 +1,9 @@
 import { create } from 'zustand'
-import type { ChatAttachment, ChatMessage } from '@modules/chat/model/types'
+import type {
+  ChatAttachment,
+  ChatMessage,
+  UploadedDocument,
+} from '@modules/chat/model/types'
 
 /**
  * Payload snapshot taken at Send-time. Restored to the composer if any
@@ -56,6 +60,22 @@ interface Store {
     pending: PendingPayload | null,
   ) => void
   clearError: (sessionId: string) => void
+  /** Drops the last message if it's a synthetic interrupted marker. Called
+   *  before send()/resume() append new messages so the marker doesn't hang
+   *  mid-list. Safe no-op when the tail isn't interrupted. */
+  removeTrailingInterrupted: (sessionId: string) => void
+  /** Promotes the PRE_SESSION_KEY seed to a freshly-minted `session_id` once
+   *  `/sessions` returns. Copies messages + `streaming` to `toKey`, resets
+   *  `fromKey` to empty state. Assumes `toKey` was just ensured (fresh). */
+  migrateSession: (fromKey: string, toKey: string) => void
+  /** Replaces the attachments on a specific message. Used to swap the
+   *  freshly-picked ChatAttachments seeded on the early user bubble for their
+   *  post-upload enriched shape once `/documents` returns. */
+  patchMessageAttachments: (
+    sessionId: string,
+    messageId: string,
+    attachments: (ChatAttachment | UploadedDocument)[],
+  ) => void
 }
 
 const emptyState = (): ChatSessionState => ({
@@ -161,6 +181,48 @@ export const useChatSessionStore = create<Store>((set) => ({
           [sessionId]: { ...cur, errorBanner: null, pendingPayload: null },
         },
       }
+    }),
+
+  removeTrailingInterrupted: (sessionId) =>
+    set((s) => {
+      const cur = s.byId[sessionId]
+      if (!cur) return s
+      const last = cur.messages[cur.messages.length - 1]
+      if (!last?.interrupted) return s
+      return {
+        byId: {
+          ...s.byId,
+          [sessionId]: { ...cur, messages: cur.messages.slice(0, -1) },
+        },
+      }
+    }),
+
+  migrateSession: (fromKey, toKey) =>
+    set((s) => {
+      const from = s.byId[fromKey]
+      if (!from) return s
+      return {
+        byId: {
+          ...s.byId,
+          [toKey]: {
+            ...emptyState(),
+            messages: from.messages,
+            streaming: from.streaming,
+          },
+          [fromKey]: emptyState(),
+        },
+      }
+    }),
+
+  patchMessageAttachments: (sessionId, messageId, attachments) =>
+    set((s) => {
+      const cur = s.byId[sessionId]
+      if (!cur) return s
+      const idx = cur.messages.findIndex((m) => m.id === messageId)
+      if (idx === -1) return s
+      const msgs = [...cur.messages]
+      msgs[idx] = { ...msgs[idx], attachments }
+      return { byId: { ...s.byId, [sessionId]: { ...cur, messages: msgs } } }
     }),
 }))
 
