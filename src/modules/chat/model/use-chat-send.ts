@@ -194,13 +194,26 @@ export function useChatSend(): UseChatSendResult {
                 store.setStreaming(sid!, false)
                 if (agentError) reject(new Error(agentError))
                 else if (result.ok) resolve()
+                // User-initiated abort (Stop button) is NOT a retryable
+                // error — the BE observed the socket close and will apply
+                // its own rollback contract (FE_HANDOFF §6). Resolve
+                // quietly so the RETRY banner + composer restore do not
+                // fire on a deliberate cancel.
+                else if (result.aborted) resolve()
                 else reject(new Error(result.error))
               },
             },
           )
         })
       } catch (err) {
-        // RETRY protocol.
+        // RETRY protocol — skip when the failure was a user abort (Stop
+        // button). Handled above via `result.aborted`; this guard covers
+        // the fallback path where an AbortError somehow escapes as a
+        // native throw before onDone ran.
+        if (err instanceof Error && err.message === 'Stream aborted') {
+          if (sid) store.setStreaming(sid, false)
+          return
+        }
         const key = sid ?? PRE_SESSION_KEY
         // Rollback the pre-session seed: the user's message never made it to
         // the BE (upload / /sessions failure), so retaining the phantom user
