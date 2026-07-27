@@ -87,18 +87,18 @@ export function ChatInput({ disabled }: ChatInputProps) {
     })
   }, [stateKey, replaceAll])
 
+  // Composer is "busy" for both the local send() promise AND any active
+  // stream in the store. The store copy is what carries over the /new →
+  // /chat/:sid route change — the whole ChatInput unmounts on that
+  // navigate() (two separate routes) and local `busy` resets. Without
+  // reading `session.streaming` here, the composer would look enabled
+  // for the entire first-message SSE on /new.
+  const isBusy = busy || session.streaming
   const canSend =
-    (value.trim().length > 0 || attachments.length > 0) && !disabled && !busy
+    (value.trim().length > 0 || attachments.length > 0) && !disabled && !isBusy
 
   const submit = async () => {
     if (!canSend) return
-    // Snapshot BEFORE clearing so the pipeline sees the payload the user
-    // typed, not an empty composer. useChatSend's pendingPayload restore
-    // path re-populates the composer on failure — so clearing immediately
-    // is safe and gives the user instant "message sent" feedback.
-    const snapshot = { text: value.trim(), attachments }
-    setValue('')
-    reset()
     setBusy(true)
     // Capture BEFORE clearing so useChatSend still sees the payload — then
     // clear the composer IMMEDIATELY so pressing Send visibly commits the
@@ -183,10 +183,10 @@ export function ChatInput({ disabled }: ChatInputProps) {
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={busy ? 'Sending…' : 'Ask Anything.....'}
+            placeholder={isBusy ? 'Sending…' : 'Ask Anything.....'}
             rows={1}
             aria-label="Message"
-            disabled={busy}
+            disabled={isBusy}
             className={cn(
               'block max-h-40 w-full resize-none overflow-y-auto bg-transparent px-1 py-1.5',
               'text-sm text-heading placeholder:text-muted',
@@ -198,7 +198,7 @@ export function ChatInput({ disabled }: ChatInputProps) {
               title="Attach files"
               className={cn(
                 'flex size-9 items-center justify-center rounded-lg border border-divider bg-surface text-body transition-colors',
-                busy
+                isBusy
                   ? 'cursor-not-allowed opacity-50'
                   : 'cursor-pointer hover:bg-hover hover:text-heading',
               )}
@@ -208,7 +208,7 @@ export function ChatInput({ disabled }: ChatInputProps) {
                 multiple
                 aria-label="Attach files"
                 className="sr-only"
-                disabled={busy}
+                disabled={isBusy}
                 onChange={(e) => {
                   pick(e.target.files)
                   // Reset so re-picking the same file still fires change.
@@ -245,18 +245,18 @@ export function ChatInput({ disabled }: ChatInputProps) {
                   type="button"
                   onClick={submit}
                   disabled={!canSend}
-                  aria-label={busy ? 'Sending' : 'Send message'}
-                  aria-busy={busy}
+                  aria-label={isBusy ? 'Sending' : 'Send message'}
+                  aria-busy={isBusy}
                   className={cn(
                     'flex size-9 items-center justify-center rounded-lg transition-colors',
                     canSend
                       ? 'bg-brand text-white hover:bg-brand-hover'
-                      : busy
+                      : isBusy
                         ? 'bg-brand text-white'
                         : 'cursor-not-allowed bg-surface text-muted',
                   )}
                 >
-                  {busy ? (
+                  {isBusy ? (
                     <Loader2 className="size-4 animate-spin" />
                   ) : (
                     <ArrowUp className="size-4" />
