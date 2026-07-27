@@ -16,8 +16,11 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       // Dev proxies:
       //   /api/*   → platform-system (Java, 8080) — auth, KB, workspace
+      //   /health  → platform-system (Java, 8080) — root-path liveness probe;
+      //             platform serves /health at ROOT (not /api/health), so
+      //             this is a dedicated one-path proxy. In prod the same-
+      //             origin GCP LB routes /health to platform too.
       //   /agent/* → agent-system    (Python, 8000) — sessions, triage, SSE
-      // In prod both prefixes are routed by the same-origin GCP LB gateway.
       // Agent-system mounts routers at `/sessions` (no `/agent` prefix), so
       // `rewrite` strips the prefix before forwarding.
       proxy: {
@@ -35,6 +38,10 @@ export default defineConfig(({ mode }) => {
               console.log(`[proxy] ✗ ${req.url}: ${err.message}`)
             })
           },
+        },
+        '/health': {
+          target: apiTarget,
+          changeOrigin: true,
         },
         '/agent': {
           target: agentTarget,
