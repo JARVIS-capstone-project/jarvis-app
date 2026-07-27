@@ -3,6 +3,7 @@ import { RefreshCw } from 'lucide-react'
 import { adminSystemService } from '@modules/admin/api/admin-system-service'
 import { useEndpoint, type EndpointResult } from '@modules/admin/model/use-endpoint'
 import { HealthLight } from '@modules/admin/ui/components/health-light'
+import { LoginHistoryCard } from '@modules/admin/ui/components/login-history-card'
 import { SourceBadge, type Source } from '@modules/admin/ui/components/source-badge'
 import {
   HealthCardSkeleton,
@@ -70,6 +71,11 @@ export function AdminSystemPage() {
           <TimersTable data={metrics.data as MetricsResponse | null} />
         )}
       </BentoCard>
+
+      {/* Renders as a fragment → two sibling grid children:
+          - LoginStatsCard   (col-span-1)
+          - IpBreakdownCard  (col-span-2)                     */}
+      <LoginHistoryCard />
     </div>
   )
 }

@@ -20,11 +20,13 @@ export const adminRoutes: RouteObject[] = [
       </RequireRole>
     ),
     children: [
-      { index: true, element: <Navigate to="users" replace /> },
+      // Admin's home is /admin/system — health + metrics + login history is
+      // the first-look surface after login. Users/audit are drill-downs.
+      { index: true, element: <Navigate to="system" replace /> },
+      { path: 'system', element: <AdminSystemPage /> },
+      { path: 'audit', element: <AdminAuditPage /> },
       { path: 'users', element: <AdminUsersPage /> },
       { path: 'users/:id', element: <AdminUserDetailPage /> },
-      { path: 'audit', element: <AdminAuditPage /> },
-      { path: 'system', element: <AdminSystemPage /> },
     ],
   },
 ]

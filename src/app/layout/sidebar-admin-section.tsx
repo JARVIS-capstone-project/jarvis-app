@@ -10,9 +10,9 @@ interface Item {
 }
 
 const ITEMS: Item[] = [
-  { to: '/admin/users', label: 'Users', Icon: Users },
-  { to: '/admin/audit', label: 'Audit', Icon: ClipboardList },
   { to: '/admin/system', label: 'System', Icon: Activity },
+  { to: '/admin/audit', label: 'Audit', Icon: ClipboardList },
+  { to: '/admin/users', label: 'Users', Icon: Users },
 ]
 
 /**
