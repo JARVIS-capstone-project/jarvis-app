@@ -48,14 +48,17 @@ export function ChatInput({ disabled }: ChatInputProps) {
 
   // Interrupted-turn detection: after hydration on refresh, if the last
   // message is a user message with no assistant follow-up, the previous
-  // stream was cut off (page refresh / tab close). Offer a Retry that
-  // re-fires /stream with the stored user message.
+  // stream was cut off (page refresh / tab close). `useHydrateSession`
+  // ALSO appends a synthetic dim "The process was interrupted." assistant
+  // marker in that same state, so we treat either tail (a bare user OR
+  // the synthetic assistant) as "still interrupted" — the Retry banner
+  // must stay visible whichever one is on the end.
   const lastMessage = session.messages[session.messages.length - 1]
   const isInterrupted = Boolean(
     sessionId &&
-      lastMessage?.role === 'user' &&
       !session.streaming &&
-      !session.hydrating,
+      !session.hydrating &&
+      (lastMessage?.role === 'user' || lastMessage?.interrupted === true),
   )
 
   // Resize the textarea to fit content on every value change. Height is
@@ -97,8 +100,17 @@ export function ChatInput({ disabled }: ChatInputProps) {
     setValue('')
     reset()
     setBusy(true)
+    // Capture BEFORE clearing so useChatSend still sees the payload — then
+    // clear the composer IMMEDIATELY so pressing Send visibly commits the
+    // message instead of letting the text sit in the input while the pre-
+    // stream work (uploads, /sessions) runs. On failure, useChatSend's
+    // pendingPayload → the store subscribe above refills the composer.
+    const capturedText = value.trim()
+    const capturedAttachments = attachments
+    setValue('')
+    reset()
     try {
-      await send(snapshot)
+      await send({ text: capturedText, attachments: capturedAttachments })
     } finally {
       setBusy(false)
     }

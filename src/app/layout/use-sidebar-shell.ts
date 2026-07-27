@@ -1,8 +1,6 @@
 import type { ComponentType } from 'react'
-import { useCallback } from 'react'
 import { Archive, MessageSquare } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router'
-import { useTheme } from '@app/providers/theme-context'
 
 export interface SidebarFeature {
   key: string
@@ -18,12 +16,13 @@ export interface SidebarFeature {
 
 interface UseSidebarShellResult {
   features: SidebarFeature[]
-  isDarkMode: boolean
-  onToggleTheme: (checked: boolean) => void
 }
 
 /**
- * Sidebar view-model. Owns the feature list (routing) + darkmode wire-up.
+ * Sidebar view-model. Owns the feature list (routing) only. Theme and user
+ * actions moved into `<SidebarUser>` — those live inside the footer popover
+ * now, so the shell hook no longer needs to know about them.
+ *
  * Open/closed state is NOT here — that's a layout concern owned by the
  * page (see chat-page.tsx), because the same flag drives whether the
  * sidebar renders AND whether the chat section shows its expand button.
@@ -31,12 +30,6 @@ interface UseSidebarShellResult {
 export function useSidebarShell(): UseSidebarShellResult {
   const navigate = useNavigate()
   const { pathname } = useLocation()
-  const { theme, setTheme } = useTheme()
-
-  const onToggleTheme = useCallback(
-    (checked: boolean) => setTheme(checked ? 'dark' : 'light'),
-    [setTheme],
-  )
 
   const features: SidebarFeature[] = [
     {
@@ -55,9 +48,5 @@ export function useSidebarShell(): UseSidebarShellResult {
     },
   ]
 
-  return {
-    features,
-    isDarkMode: theme === 'dark',
-    onToggleTheme,
-  }
+  return { features }
 }
