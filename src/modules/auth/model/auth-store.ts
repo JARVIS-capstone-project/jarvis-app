@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
+import { decodeAccessToken } from '@shared/lib/decode-jwt'
 
 /**
  * Persisted auth session. The accessToken lives in localStorage so a page
@@ -7,9 +8,9 @@ import { persist, createJSONStorage } from 'zustand/middleware'
  * at which point the next protected call 401s and the caller must clear() +
  * redirect. Silent refresh via the HttpOnly refresh cookie is a later ticket.
  *
- * The token is a JWT — user identity (email, id, roles) is encoded in its
- * payload. Decode on demand at the call site; nothing is denormalized into
- * this store.
+ * `roles` is derived from the token payload at `setSession` time and persisted
+ * alongside so a page refresh doesn't lose the admin-nav visibility. The BE
+ * remains the authority — every admin API call is server-side gated.
  *
  * Trade-off: localStorage is XSS-readable. If a script injection ever lands
  * in this app, the token is exfiltratable. Accepted for now; revisit when
@@ -17,6 +18,7 @@ import { persist, createJSONStorage } from 'zustand/middleware'
  */
 interface AuthState {
   accessToken: string | null
+  roles: string[]
   setSession: (accessToken: string) => void
   clear: () => void
 }
@@ -25,14 +27,20 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       accessToken: null,
-      setSession: (accessToken) => set({ accessToken }),
-      clear: () => set({ accessToken: null }),
+      roles: [],
+      setSession: (accessToken) => {
+        const payload = decodeAccessToken(accessToken)
+        set({ accessToken, roles: payload?.roles ?? [] })
+      },
+      clear: () => set({ accessToken: null, roles: [] }),
     }),
     {
       name: 'jarvis.auth',
       storage: createJSONStorage(() => localStorage),
-      // Persist only the session slice — never the action functions.
-      partialize: (state) => ({ accessToken: state.accessToken }),
+      partialize: (state) => ({
+        accessToken: state.accessToken,
+        roles: state.roles,
+      }),
     },
   ),
 )
@@ -43,3 +51,6 @@ export const useAccessToken = () => useAuthStore((s) => s.accessToken)
 // `Boolean(...)` (not `!== null`) so any falsy token — including an empty
 // string a future refresh-error path might set — fails the guard.
 export const useIsAuthenticated = () => useAuthStore((s) => Boolean(s.accessToken))
+// Uppercase 'ADMIN' matches the platform-issued JWT `roles` claim exactly
+// (see UserRoleConfig.java). Do not lowercase-compare.
+export const useIsAdmin = () => useAuthStore((s) => s.roles.includes('ADMIN'))

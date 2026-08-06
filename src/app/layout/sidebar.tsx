@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react'
 import { PanelLeftClose } from 'lucide-react'
 import { SidebarUser } from '@app/layout/sidebar-user'
+import { SidebarAdminSection } from '@app/layout/sidebar-admin-section'
 import { useSidebarShell } from '@app/layout/use-sidebar-shell'
+import { useIsAdmin } from '@modules/auth/model/auth-store'
 import { SessionHistory } from '@modules/chat/ui/components/session-history'
 import { BrandMark } from '@shared/ui/brand-mark'
 import { ItemButton } from '@shared/ui/item-button'
@@ -19,6 +21,10 @@ interface SidebarProps {
  */
 export function Sidebar({ onClose }: SidebarProps) {
   const { features } = useSidebarShell()
+  // Admins are blocked from user routes (chat, workspace) so their nav
+  // shouldn't advertise those either — hide the Features + SessionHistory
+  // sections and show only the Admin nav + user popover.
+  const isAdmin = useIsAdmin()
 
   return (
     // Below md: fixed overlay drawer (z-50, sits over the chat).
@@ -41,24 +47,33 @@ export function Sidebar({ onClose }: SidebarProps) {
         )}
       </header>
 
-      <nav className="flex flex-col gap-1">
-        <SidebarLabel>Features</SidebarLabel>
-        {features.map(({ key, label, Icon, isActive, onSelect, disabledHint }) => (
-          <ItemButton
-            key={key}
-            isActive={isActive}
-            leftIcon={<Icon className="size-5" />}
-            onClick={onSelect}
-            title={disabledHint}
-          >
-            {label}
-          </ItemButton>
-        ))}
-      </nav>
+      {!isAdmin && (
+        <>
+          <nav className="flex flex-col gap-1">
+            <SidebarLabel>Features</SidebarLabel>
+            {features.map(({ key, label, Icon, isActive, onSelect, disabledHint }) => (
+              <ItemButton
+                key={key}
+                isActive={isActive}
+                leftIcon={<Icon className="size-5" />}
+                onClick={onSelect}
+                title={disabledHint}
+              >
+                {label}
+              </ItemButton>
+            ))}
+          </nav>
 
-      <div className="flex min-h-0 flex-1 flex-col">
-        <SessionHistory />
-      </div>
+          <div className="flex min-h-0 flex-1 flex-col">
+            <SessionHistory />
+          </div>
+        </>
+      )}
+
+      <SidebarAdminSection />
+
+      {/* Push user popover to the bottom when the middle sections are hidden. */}
+      {isAdmin && <div className="flex-1" />}
 
       <div className="flex flex-col gap-1">
         <SidebarUser />

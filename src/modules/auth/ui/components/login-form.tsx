@@ -9,6 +9,7 @@ import { Button } from '@shared/ui/button'
 import { Input } from '@shared/ui/input'
 import { useLogin } from '@modules/auth/model/use-login'
 import { useResendVerification } from '@modules/auth/model/use-resend-verification'
+import { useAuthStore } from '@modules/auth/model/auth-store'
 
 // Container drives the reveal: waits 0.4s after mount (letting the HUD + reactor
 // settle first), then reveals each child 0.08s apart. Total sequence ~1.2s.
@@ -63,7 +64,13 @@ export function LoginForm() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const session = await submit({ email, password, remember })
-    if (session) navigate('/new', { replace: true })
+    if (!session) return
+    // useLogin.submit() calls setSession → auth-store decodes roles synchronously,
+    // so by the time we read here the roles are already populated. Admins land on
+    // /admin/system (their default surface); regular users on /new. This avoids
+    // the two-hop redirect through /new → RedirectIfRole → /admin/system.
+    const isAdmin = useAuthStore.getState().roles.includes('ADMIN')
+    navigate(isAdmin ? '/admin/system' : '/new', { replace: true })
   }
 
   return (
