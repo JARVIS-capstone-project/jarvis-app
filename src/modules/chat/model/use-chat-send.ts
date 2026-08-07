@@ -218,10 +218,10 @@ export function useChatSend(): UseChatSendResult {
                   // can render the inline chip. Boolean-normalised so the
                   // absence of the field reads as `false`, matching BE
                   // semantics (missing → not escalated).
-                  //
-                  // DEBUG: forced to `true` for FE preview. Revert: swap
-                  // the argument for `Boolean(frame.data.requires_escalation)`.
-                  store.setLastAssistantEscalation(sid!, true)
+                  store.setLastAssistantEscalation(
+                    sid!,
+                    Boolean(frame.data.requires_escalation),
+                  )
                   // Rate-limit path: BE emits both `error` (with code) and
                   // `turn_end` (with finish_reason). This is the defensive
                   // catch when error frame is missed.
@@ -232,19 +232,12 @@ export function useChatSend(): UseChatSendResult {
                     alertCode = finishMapped
                     store.setAlert(finishMapped)
                   }
-                  // Escalation path: successful turn but the agent signalled
+                  // Escalation path: successful turn AND the agent signalled
                   // it wants a human. Set `alertCode` so onDone's clear path
                   // doesn't wipe the alert we just raised. When escalation
                   // is false the guard leaves `alertCode` null → onDone
                   // clears any prior escalation alert.
-                  //
-                  // ┌─ DEBUG: forced-on for FE preview while the BE can't
-                  // │  flip requires_escalation:true. To revert:
-                  // │    1. delete the `if (!alertCode) { ... }` block below
-                  // │    2. uncomment the original condition on the next line
-                  // └────────────────────────────────────────────────
-                  // if (frame.data.requires_escalation && !alertCode) {
-                  if (!alertCode) {
+                  if (frame.data.requires_escalation && !alertCode) {
                     alertCode = 'requires_escalation'
                     store.setAlert('requires_escalation')
                   }
@@ -435,9 +428,10 @@ export function useChatSend(): UseChatSendResult {
                       frame.data.response_time_ms,
                     )
                   }
-                  // DEBUG: forced to `true` for FE preview. Revert: swap
-                  // the argument for `Boolean(frame.data.requires_escalation)`.
-                  store.setLastAssistantEscalation(sessionId, true)
+                  store.setLastAssistantEscalation(
+                    sessionId,
+                    Boolean(frame.data.requires_escalation),
+                  )
                   const finishMapped = frame.data.finish_reason
                     ? ALERT_CODES[frame.data.finish_reason]
                     : undefined
@@ -445,11 +439,7 @@ export function useChatSend(): UseChatSendResult {
                     alertCode = finishMapped
                     store.setAlert(finishMapped)
                   }
-                  // DEBUG: mirror of the send() forced-on. Revert steps:
-                  //   1. delete the `if (!alertCode) { ... }` block below
-                  //   2. uncomment the original condition on the next line
-                  // if (frame.data.requires_escalation && !alertCode) {
-                  if (!alertCode) {
+                  if (frame.data.requires_escalation && !alertCode) {
                     alertCode = 'requires_escalation'
                     store.setAlert('requires_escalation')
                   }
