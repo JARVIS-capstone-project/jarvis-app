@@ -9,11 +9,13 @@ import { agentHttpClient } from '@shared/api/agent-http-client'
  * Login history stays on platform — logins are auth events that happen on
  * platform, not agent, so there's no agent equivalent to migrate to.
  */
+export type LoginRange = 'today' | '7d' | '30d' | '1y' | 'all'
+
 export const adminAuditService = {
   turnsAgent(params: { limit: number; offset: number }) {
     return agentHttpClient.get<unknown>('/admin/audit', { params })
   },
-  logins(params: { limit: number; offset: number }) {
+  logins(params: { limit: number; offset: number; range: LoginRange }) {
     return httpClient.get<unknown>('/admin/audit/logins', { params })
   },
 }

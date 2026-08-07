@@ -5,6 +5,7 @@ import type { AttachmentIn } from '@modules/chat/api/agent-types'
 import {
   PRE_SESSION_KEY,
   useChatSessionStore,
+  type ChatAlertCode,
 } from '@modules/chat/model/chat-session-store'
 import { useSessionsStore } from '@modules/chat/model/sessions-store'
 import { ThinkingQueue } from '@modules/chat/model/thinking-queue'
@@ -37,6 +38,18 @@ interface UseChatSendResult {
 
 const ERROR_BANNER = 'Error happened please try again'
 const TITLE_MAX = 80
+
+/**
+ * BE error/finish codes that map to a typed ChatAlert (rate-limit today,
+ * more to come). Membership here has two effects:
+ *   - fires `store.setAlert(code)` when observed on an `error` frame or
+ *     `turn_end` finish_reason,
+ *   - suppresses the retry-banner in the catch path since these conditions
+ *     are not resolved by clicking Retry.
+ */
+const ALERT_CODES: Record<string, ChatAlertCode> = {
+  upstream_rate_limited: 'upstream_rate_limited',
+}
 
 /**
  * Orchestrates the New Chat send pipeline. Sequential per the plan:
@@ -84,6 +97,9 @@ export function useChatSend(): UseChatSendResult {
       // updated once /sessions returns.
       let sid: string | null = priorSid
       let uploadedAttachments: ChatAttachment[] = snapshot.attachments
+      // Hoisted so the catch block can see it — populated inside the stream
+      // Promise when a typed alert (rate-limit et al) fires.
+      let alertCode: ChatAlertCode | null = null
 
       // (SEED) User bubble + empty assistant placeholder are appended IMMEDIATELY
       // — before uploads / /sessions — so the message visibly commits the moment
@@ -181,6 +197,57 @@ export function useChatSend(): UseChatSendResult {
                   thinking.addThinking(frame.data.delta)
                 } else if (frame.event === 'error') {
                   agentError = frame.data.message || 'Agent error'
+                  const mapped = frame.data.code
+                    ? ALERT_CODES[frame.data.code]
+                    : undefined
+                  if (mapped) {
+                    alertCode = mapped
+                    store.setAlert(mapped)
+                  }
+                } else if (frame.event === 'turn_end') {
+                  // Stamp response_time_ms onto the streaming assistant
+                  // bubble so its "Answered in …s" caption shows the moment
+                  // the stream lands.
+                  if (typeof frame.data.response_time_ms === 'number') {
+                    store.setLastAssistantResponseTime(
+                      sid!,
+                      frame.data.response_time_ms,
+                    )
+                  }
+                  // Persist the per-message escalation flag so MessageBubble
+                  // can render the inline chip. Boolean-normalised so the
+                  // absence of the field reads as `false`, matching BE
+                  // semantics (missing → not escalated).
+                  //
+                  // DEBUG: forced to `true` for FE preview. Revert: swap
+                  // the argument for `Boolean(frame.data.requires_escalation)`.
+                  store.setLastAssistantEscalation(sid!, true)
+                  // Rate-limit path: BE emits both `error` (with code) and
+                  // `turn_end` (with finish_reason). This is the defensive
+                  // catch when error frame is missed.
+                  const finishMapped = frame.data.finish_reason
+                    ? ALERT_CODES[frame.data.finish_reason]
+                    : undefined
+                  if (finishMapped && !alertCode) {
+                    alertCode = finishMapped
+                    store.setAlert(finishMapped)
+                  }
+                  // Escalation path: successful turn but the agent signalled
+                  // it wants a human. Set `alertCode` so onDone's clear path
+                  // doesn't wipe the alert we just raised. When escalation
+                  // is false the guard leaves `alertCode` null → onDone
+                  // clears any prior escalation alert.
+                  //
+                  // ┌─ DEBUG: forced-on for FE preview while the BE can't
+                  // │  flip requires_escalation:true. To revert:
+                  // │    1. delete the `if (!alertCode) { ... }` block below
+                  // │    2. uncomment the original condition on the next line
+                  // └────────────────────────────────────────────────
+                  // if (frame.data.requires_escalation && !alertCode) {
+                  if (!alertCode) {
+                    alertCode = 'requires_escalation'
+                    store.setAlert('requires_escalation')
+                  }
                 }
                 // thinking_end / tool_* / warning / turn_start / citation —
                 // typed for parser safety but not wired to UI yet.
@@ -193,7 +260,13 @@ export function useChatSend(): UseChatSendResult {
                 store.setLastAssistantThinking(sid!, null)
                 store.setStreaming(sid!, false)
                 if (agentError) reject(new Error(agentError))
-                else if (result.ok) resolve()
+                else if (result.ok) {
+                  // Only clear when THIS turn didn't itself raise an alert —
+                  // otherwise a successful turn carrying `requires_escalation`
+                  // would wipe the alert it just set.
+                  if (!alertCode) store.clearAlert()
+                  resolve()
+                }
                 // User-initiated abort (Stop button) is NOT a retryable
                 // error — the BE observed the socket close and will apply
                 // its own rollback contract (FE_HANDOFF §6). Resolve
@@ -228,12 +301,22 @@ export function useChatSend(): UseChatSendResult {
         }
         // Ensure the slot exists so setError doesn't lose the banner.
         store.ensure(key)
-        store.setError(key, ERROR_BANNER, {
-          text: snapshot.text,
-          // Use the enriched attachments (with sourceId set on the ones
-          // that succeeded) so retry skips them.
-          attachments: uploadedAttachments,
-        })
+        // Suppress the generic retry banner when a typed alert already
+        // explains the failure (retry won't help for rate-limit et al).
+        // We DO still stash pendingPayload so the composer restores.
+        if (alertCode) {
+          store.setError(key, null, {
+            text: snapshot.text,
+            attachments: uploadedAttachments,
+          })
+        } else {
+          store.setError(key, ERROR_BANNER, {
+            text: snapshot.text,
+            // Use the enriched attachments (with sourceId set on the ones
+            // that succeeded) so retry skips them.
+            attachments: uploadedAttachments,
+          })
+        }
         // Log for devs; suppress the throw so the caller (ChatInput) doesn't
         // see a rejection. State-based error surface is enough.
         console.warn(
@@ -320,6 +403,7 @@ export function useChatSend(): UseChatSendResult {
       // Same `agentError` capture pattern as `send` — BE emits `error`
       // frame BEFORE `turn_end`, so we buffer it and reject on turn_end.
       let agentError: string | null = null
+      let alertCode: ChatAlertCode | null = null
       const thinking = new ThinkingQueue({
         onThinking: (text) => store.setLastAssistantThinking(sessionId, text),
         onText: (delta) => store.patchLastAssistant(sessionId, delta),
@@ -337,6 +421,38 @@ export function useChatSend(): UseChatSendResult {
                   thinking.addThinking(frame.data.delta)
                 } else if (frame.event === 'error') {
                   agentError = frame.data.message || 'Agent error'
+                  const mapped = frame.data.code
+                    ? ALERT_CODES[frame.data.code]
+                    : undefined
+                  if (mapped) {
+                    alertCode = mapped
+                    store.setAlert(mapped)
+                  }
+                } else if (frame.event === 'turn_end') {
+                  if (typeof frame.data.response_time_ms === 'number') {
+                    store.setLastAssistantResponseTime(
+                      sessionId,
+                      frame.data.response_time_ms,
+                    )
+                  }
+                  // DEBUG: forced to `true` for FE preview. Revert: swap
+                  // the argument for `Boolean(frame.data.requires_escalation)`.
+                  store.setLastAssistantEscalation(sessionId, true)
+                  const finishMapped = frame.data.finish_reason
+                    ? ALERT_CODES[frame.data.finish_reason]
+                    : undefined
+                  if (finishMapped && !alertCode) {
+                    alertCode = finishMapped
+                    store.setAlert(finishMapped)
+                  }
+                  // DEBUG: mirror of the send() forced-on. Revert steps:
+                  //   1. delete the `if (!alertCode) { ... }` block below
+                  //   2. uncomment the original condition on the next line
+                  // if (frame.data.requires_escalation && !alertCode) {
+                  if (!alertCode) {
+                    alertCode = 'requires_escalation'
+                    store.setAlert('requires_escalation')
+                  }
                 }
               },
               onDone: (result) => {
@@ -344,15 +460,18 @@ export function useChatSend(): UseChatSendResult {
                 store.setLastAssistantThinking(sessionId, null)
                 store.setStreaming(sessionId, false)
                 if (agentError) reject(new Error(agentError))
-                else if (result.ok) resolve()
-                else reject(new Error(result.error))
+                else if (result.ok) {
+                  if (!alertCode) store.clearAlert()
+                  resolve()
+                } else reject(new Error(result.error))
               },
             },
           )
         })
       } catch (err) {
         // Failure here → normal RETRY protocol so the user can hit Retry again.
-        store.setError(sessionId, ERROR_BANNER, {
+        // Suppress retry banner when a typed alert already explains the failure.
+        store.setError(sessionId, alertCode ? null : ERROR_BANNER, {
           text: last.content,
           attachments: [],
         })

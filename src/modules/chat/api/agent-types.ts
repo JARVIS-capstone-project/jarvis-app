@@ -42,6 +42,14 @@ export interface MessageDTO {
   role: string
   content: string
   attachments?: AttachmentIn[]
+  /** Present only on assistant messages — mirrors the BE `turn` block. Only
+   *  the fields the FE currently consumes are typed; add more as needed. */
+  turn?: MessageTurnDTO | null
+}
+
+export interface MessageTurnDTO {
+  response_time_ms?: number
+  requires_escalation?: boolean
 }
 
 /* ---------- Chat / attachments ------------------------------------------- */
@@ -118,5 +126,6 @@ export type SseFrame =
         fallback?: boolean
         ok?: boolean
         error?: string | null
+        response_time_ms?: number
       }
     }

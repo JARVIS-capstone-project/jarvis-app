@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react'
 import { RefreshCw, ShieldAlert, Users } from 'lucide-react'
-import { adminAuditService } from '@modules/admin/api/admin-audit-service'
+import {
+  adminAuditService,
+  type LoginRange,
+} from '@modules/admin/api/admin-audit-service'
 import { useEndpoint } from '@modules/admin/model/use-endpoint'
 import { SourceBadge } from '@modules/admin/ui/components/source-badge'
 import { MetricsTableSkeleton } from '@modules/admin/ui/components/skeleton-shapes'
@@ -13,31 +16,22 @@ import { cn } from '@shared/lib/cn'
  *                              time-window filter and Refresh.
  *   - Right card (col-span-2): IP breakdown table.
  *
- * Both derive from the SAME fetch + window state, held here so the two
+ * Both derive from the SAME fetch + range state, held here so the two
  * cards stay in sync. Returned as a fragment so the parent's grid places
  * them as siblings, keeping their bento position clean.
  *
- * Time filter is client-side (BE has no time-range param yet). We fetch
- * `limit=50` and filter `attempted_at` locally.
+ * Filtering is server-side via the `range` query param (Vietnam UTC+7 on
+ * platform's side). We refetch when the range changes; the aggregate stats
+ * are computed off the returned `items` slice.
  */
 const FETCH_LIMIT = 50
 
-type Window = 'today' | '7d' | '30d' | 'year' | 'all'
-
-const WINDOW_LABEL: Record<Window, string> = {
+const RANGE_LABEL: Record<LoginRange, string> = {
   today: 'Today',
   '7d': '7 days',
   '30d': '30 days',
-  year: '1 year',
+  '1y': '1 year',
   all: 'All',
-}
-
-const WINDOW_MS: Record<Window, number | null> = {
-  today: 24 * 60 * 60 * 1000,
-  '7d': 7 * 24 * 60 * 60 * 1000,
-  '30d': 30 * 24 * 60 * 60 * 1000,
-  year: 365 * 24 * 60 * 60 * 1000,
-  all: null,
 }
 
 interface LoginRow {
@@ -57,17 +51,6 @@ function extractItems(payload: unknown): LoginRow[] {
   if (!payload || typeof payload !== 'object') return []
   const env = payload as Envelope
   return Array.isArray(env.items) ? env.items : []
-}
-
-function filterByWindow(items: LoginRow[], window: Window): LoginRow[] {
-  const ms = WINDOW_MS[window]
-  if (ms === null) return items
-  const cutoff = Date.now() - ms
-  return items.filter((r) => {
-    if (!r.attempted_at) return false
-    const t = Date.parse(r.attempted_at)
-    return !Number.isNaN(t) && t >= cutoff
-  })
 }
 
 interface Aggregates {
@@ -102,13 +85,13 @@ function aggregate(items: LoginRow[]): Aggregates {
 }
 
 export function LoginHistoryCard() {
-  const [window, setWindow] = useState<Window>('today')
-  const endpoint = useEndpoint(() =>
-    adminAuditService.logins({ limit: FETCH_LIMIT, offset: 0 }),
+  const [range, setRange] = useState<LoginRange>('today')
+  const endpoint = useEndpoint(
+    () => adminAuditService.logins({ limit: FETCH_LIMIT, offset: 0, range }),
+    [range],
   )
   const items = useMemo(() => extractItems(endpoint.data), [endpoint.data])
-  const filtered = useMemo(() => filterByWindow(items, window), [items, window])
-  const agg = useMemo(() => aggregate(filtered), [filtered])
+  const agg = useMemo(() => aggregate(items), [items])
   const totalRaw: number | null =
     endpoint.data &&
     typeof endpoint.data === 'object' &&
@@ -121,14 +104,14 @@ export function LoginHistoryCard() {
   return (
     <>
       <LoginStatsCard
-        window={window}
-        onWindowChange={setWindow}
+        range={range}
+        onRangeChange={setRange}
         onRefresh={endpoint.refetch}
         loading={endpoint.loading}
         error={endpoint.error}
         isFirstLoad={isFirstLoad}
         aggregates={agg}
-        totalOnRecord={totalRaw}
+        totalInRange={totalRaw}
       />
       <IpBreakdownCard
         aggregates={agg}
@@ -140,25 +123,25 @@ export function LoginHistoryCard() {
 }
 
 interface StatsProps {
-  window: Window
-  onWindowChange: (w: Window) => void
+  range: LoginRange
+  onRangeChange: (r: LoginRange) => void
   onRefresh: () => void
   loading: boolean
   error: string | null
   isFirstLoad: boolean
   aggregates: Aggregates
-  totalOnRecord: number | null
+  totalInRange: number | null
 }
 
 function LoginStatsCard({
-  window,
-  onWindowChange,
+  range,
+  onRangeChange,
   onRefresh,
   loading,
   error,
   isFirstLoad,
   aggregates,
-  totalOnRecord,
+  totalInRange,
 }: StatsProps) {
   return (
     <section className="flex flex-col rounded-xl border border-divider bg-panel p-4">
@@ -171,8 +154,10 @@ function LoginStatsCard({
             <SourceBadge source="platform" />
           </div>
           <p className="mt-0.5 font-mono text-[10px] uppercase tracking-widest text-muted">
-            /api/admin/audit/logins · last {FETCH_LIMIT}
-            {typeof totalOnRecord === 'number' && ` (of ${totalOnRecord} on record)`}
+            /api/admin/audit/logins · showing {aggregates.total}
+            {typeof totalInRange === 'number' &&
+              totalInRange > aggregates.total &&
+              ` of ${totalInRange} in range`}
           </p>
         </div>
         <button
@@ -187,27 +172,22 @@ function LoginStatsCard({
       </header>
 
       <div className="mt-3 flex flex-wrap gap-1 self-start overflow-hidden rounded-md border border-divider">
-        {(Object.keys(WINDOW_LABEL) as Window[]).map((w) => (
+        {(Object.keys(RANGE_LABEL) as LoginRange[]).map((r) => (
           <button
-            key={w}
+            key={r}
             type="button"
-            onClick={() => onWindowChange(w)}
+            onClick={() => onRangeChange(r)}
             className={cn(
               'px-2 py-1 font-mono text-[10px] uppercase tracking-widest transition-colors',
-              w === window
+              r === range
                 ? 'bg-brand text-white'
                 : 'bg-surface text-body hover:bg-hover hover:text-heading',
             )}
           >
-            {WINDOW_LABEL[w]}
+            {RANGE_LABEL[r]}
           </button>
         ))}
       </div>
-
-      <p className="mt-2 font-mono text-[10px] text-muted">
-        ⓘ Client-side filter over the last {FETCH_LIMIT} attempts. BE time-range
-        param pending.
-      </p>
 
       {error ? (
         <ErrorPanel message={error} />

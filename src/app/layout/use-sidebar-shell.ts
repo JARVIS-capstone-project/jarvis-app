@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react'
-import { Archive, MessageSquare } from 'lucide-react'
+import { Archive, SquarePen } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router'
 
 export interface SidebarFeature {
@@ -34,8 +34,11 @@ export function useSidebarShell(): UseSidebarShellResult {
   const features: SidebarFeature[] = [
     {
       key: 'chat',
-      label: 'Chat',
-      Icon: MessageSquare,
+      label: 'New chat',
+      Icon: SquarePen,
+      // Highlighted only at `/new`. On `/chat/:sessionId` the row still
+      // navigates to a fresh session but reads as inactive — the user is
+      // in an existing thread, not starting a new one.
       isActive: pathname === '/new',
       onSelect: () => navigate('/new'),
     },

@@ -63,6 +63,21 @@ export interface ChatMessage {
    * The two are distinguishable by the presence of the `file` property.
    */
   attachments?: (ChatAttachment | UploadedDocument)[]
+  /**
+   * Wall-clock the agent spent on this turn, in milliseconds. Assistant
+   * messages only. Populated on hydration (`turn.response_time_ms`) and on
+   * the live path when the `turn_end` frame arrives. MessageBubble renders
+   * it as a caption above the bubble.
+   */
+  responseTimeMs?: number | null
+  /**
+   * True when the agent flagged this turn for human escalation. Assistant
+   * messages only. Populated the same way as `responseTimeMs`. Message
+   * bubble renders an inline "Human escalation" chip next to the
+   * response-time caption; the global ChatAlert also fires on the live
+   * stream, so the user sees it in two places (banner AND per-message).
+   */
+  requiresEscalation?: boolean | null
 }
 
 /**
