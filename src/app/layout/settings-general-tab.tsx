@@ -1,86 +1,40 @@
-import { useEffect, useRef, useState } from 'react'
-import type { SettingsSection } from '@app/layout/settings-modal'
+import { useEffect, useRef } from 'react'
 import { useTheme } from '@app/providers/theme-context'
 import type { Theme } from '@app/providers/theme-context'
 import { BrandMark } from '@shared/ui/brand-mark'
 import { cn } from '@shared/lib/cn'
 
 interface SettingsGeneralTabProps {
-  initialSection?: SettingsSection
+  /** When 'theme', scrolls the Theme section into view on mount. Set by the
+   *  modal when the user-menu popover deep-links here. */
+  scrollTo?: 'theme'
 }
 
-const SKELETON_MS = 800
-
 /**
- * Content of the General tab inside the settings modal. Two sections:
- *   1. Profile — placeholder for now, briefly shows a skeleton on mount
- *      (0.8s) to convey "loading" before the empty state settles.
- *   2. Theme — two mockup preview cards; clicking one applies the theme
- *      via ThemeProvider. Modal stays open (unlike the earlier standalone
- *      picker) so the user can compare / keep exploring.
- *
- * `initialSection === 'theme'` scrolls the theme section into view on
- * mount — used when the sidebar popover's Theme item opens the modal.
+ * Content of the General tab. Currently just the theme picker — profile /
+ * identity data moved to the Account tab. Kept as its own tab (rather than
+ * folded into Account) because "app preferences" and "who am I" are separate
+ * concerns and future preferences (density, language, notifications) will
+ * land here too.
  */
-export function SettingsGeneralTab({ initialSection }: SettingsGeneralTabProps) {
-  const [showSkeleton, setShowSkeleton] = useState(true)
+export function SettingsGeneralTab({ scrollTo }: SettingsGeneralTabProps) {
   const themeSectionRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const t = setTimeout(() => setShowSkeleton(false), SKELETON_MS)
-    return () => clearTimeout(t)
-  }, [])
-
-  useEffect(() => {
-    if (initialSection === 'theme' && themeSectionRef.current) {
+    if (scrollTo === 'theme' && themeSectionRef.current) {
       themeSectionRef.current.scrollIntoView({
         behavior: 'smooth',
         block: 'start',
       })
     }
-  }, [initialSection])
+  }, [scrollTo])
 
   return (
     <div className="flex flex-col gap-10">
-      <section>
-        <h3 className="mb-4 text-lg font-semibold text-heading">Profile</h3>
-        {showSkeleton ? <ProfileSkeleton /> : <ProfilePlaceholder />}
-      </section>
-
       <section ref={themeSectionRef}>
         <h3 className="mb-4 text-lg font-semibold text-heading">Theme</h3>
         <ThemePicker />
       </section>
-    </div>
-  )
-}
-
-function ProfileSkeleton() {
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="h-4 w-24 animate-pulse rounded bg-surface" />
-      <div className="h-10 w-full animate-pulse rounded bg-surface" />
-      <div className="h-4 w-28 animate-pulse rounded bg-surface" />
-      <div className="h-10 w-full animate-pulse rounded bg-surface" />
-    </div>
-  )
-}
-
-function ProfilePlaceholder() {
-  return (
-    <div className="flex flex-col gap-4">
-      <ProfileRow label="Full name" value="—" />
-      <ProfileRow label="Display name" value="—" />
-      <p className="text-xs italic text-muted">Profile editing coming soon.</p>
-    </div>
-  )
-}
-
-function ProfileRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between border-b border-divider pb-3">
-      <span className="text-sm text-body">{label}</span>
-      <span className="text-sm text-muted">{value}</span>
     </div>
   )
 }

@@ -6,6 +6,26 @@ import type {
 } from '@modules/chat/model/types'
 
 /**
+ * Typed, code-driven alert surface shown above the composer. Distinct from
+ * `errorBanner` (which is retry-oriented for pipeline failures) — alerts
+ * flag agent conditions the user can't fix by retrying:
+ *   - `upstream_rate_limited` — Gemini quota exhausted; wait it out
+ *   - `requires_escalation`   — future: human-support handoff signal
+ *
+ * `collapsed` starts false (full banner) and flips to true when the user
+ * clicks the X. In-memory only — a page reload clears the alert. Otherwise
+ * it's cleared automatically when the next `/stream` call succeeds. Global
+ * — not per session — because rate-limit is process-wide; switching
+ * sessions doesn't help.
+ */
+export type ChatAlertCode = 'upstream_rate_limited' | 'requires_escalation'
+
+export interface ChatAlert {
+  code: ChatAlertCode
+  collapsed: boolean
+}
+
+/**
  * Payload snapshot taken at Send-time. Restored to the composer if any
  * step of the pipeline fails (uploads / /sessions / /stream). Retains the
  * enriched `ChatAttachment[]` so retry can skip already-uploaded files
@@ -38,6 +58,16 @@ export const PRE_SESSION_KEY = '__pre_session__'
 
 interface Store {
   byId: Record<string, ChatSessionState>
+  /** Global (non-per-session) typed alert. See ChatAlert docstring. */
+  alert: ChatAlert | null
+  /** Sets the alert. If `code` matches the current alert, `collapsed` is
+   *  preserved so a re-fire on the same condition doesn't re-expand what
+   *  the user just dismissed. Different code → full-banner (collapsed=false). */
+  setAlert: (code: ChatAlertCode) => void
+  /** X-button handler: collapses to the short pill, does not clear. */
+  dismissAlert: () => void
+  /** Full removal; primarily used by tests and future clean-slate flows. */
+  clearAlert: () => void
   ensure: (sessionId: string) => void
   appendMessage: (sessionId: string, msg: ChatMessage) => void
   /** Replace the message list wholesale — used by hydration from
@@ -51,6 +81,12 @@ interface Store {
   /** Replace the LAST assistant message's rolling thinking text. Called by the
    *  thinking-queue drain — one thinking_delta at a time, spaced 0.8s. */
   setLastAssistantThinking: (sessionId: string, text: string | null) => void
+  /** Stamp `response_time_ms` on the LAST assistant message. Called by the
+   *  stream on `turn_end`. No-op if the last message isn't assistant. */
+  setLastAssistantResponseTime: (sessionId: string, ms: number) => void
+  /** Stamp `requires_escalation` on the LAST assistant message. Same
+   *  lifecycle as `setLastAssistantResponseTime`. */
+  setLastAssistantEscalation: (sessionId: string, v: boolean) => void
   setStreaming: (sessionId: string, v: boolean) => void
   /** Flip while `GET /sessions/{id}` is in flight. */
   setHydrating: (sessionId: string, v: boolean) => void
@@ -88,6 +124,19 @@ const emptyState = (): ChatSessionState => ({
 
 export const useChatSessionStore = create<Store>((set) => ({
   byId: {},
+  alert: null,
+
+  setAlert: (code) =>
+    set((s) => {
+      const next: ChatAlert =
+        s.alert && s.alert.code === code
+          ? s.alert
+          : { code, collapsed: false }
+      return { alert: next }
+    }),
+  dismissAlert: () =>
+    set((s) => (s.alert ? { alert: { ...s.alert, collapsed: true } } : s)),
+  clearAlert: () => set({ alert: null }),
 
   ensure: (sessionId) =>
     set((s) =>
@@ -141,6 +190,26 @@ export const useChatSessionStore = create<Store>((set) => ({
       const last = msgs[msgs.length - 1]
       if (!last || last.role !== 'assistant') return s
       msgs[msgs.length - 1] = { ...last, thinking: text }
+      return { byId: { ...s.byId, [sessionId]: { ...cur, messages: msgs } } }
+    }),
+
+  setLastAssistantResponseTime: (sessionId, ms) =>
+    set((s) => {
+      const cur = s.byId[sessionId] ?? emptyState()
+      const msgs = [...cur.messages]
+      const last = msgs[msgs.length - 1]
+      if (!last || last.role !== 'assistant') return s
+      msgs[msgs.length - 1] = { ...last, responseTimeMs: ms }
+      return { byId: { ...s.byId, [sessionId]: { ...cur, messages: msgs } } }
+    }),
+
+  setLastAssistantEscalation: (sessionId, v) =>
+    set((s) => {
+      const cur = s.byId[sessionId] ?? emptyState()
+      const msgs = [...cur.messages]
+      const last = msgs[msgs.length - 1]
+      if (!last || last.role !== 'assistant') return s
+      msgs[msgs.length - 1] = { ...last, requiresEscalation: v }
       return { byId: { ...s.byId, [sessionId]: { ...cur, messages: msgs } } }
     }),
 

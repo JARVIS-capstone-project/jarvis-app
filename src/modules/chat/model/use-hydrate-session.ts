@@ -109,6 +109,9 @@ function fromMessageDto(dto: MessageDTO): ChatMessage {
     attachments: dto.attachments && dto.attachments.length > 0
       ? dto.attachments.map(fromAttachmentIn)
       : undefined,
+    // Only assistant messages carry `turn`; the BE returns null for user rows.
+    responseTimeMs: dto.turn?.response_time_ms ?? null,
+    requiresEscalation: dto.turn?.requires_escalation ?? null,
   }
 }
 

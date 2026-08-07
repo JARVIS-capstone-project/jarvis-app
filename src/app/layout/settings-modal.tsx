@@ -1,50 +1,69 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { SettingsGeneralTab } from '@app/layout/settings-general-tab'
+import { SettingsAccountTab } from '@app/layout/settings-account-tab'
 import { cn } from '@shared/lib/cn'
 
+type TabKey = 'general' | 'account' | 'privacy' | 'billing'
+
 /**
- * Named anchors inside the settings modal. Passed via `initialSection` so
- * the caller can jump the modal straight to a section on open (e.g. the
- * user popover's Theme item opens Settings and scrolls to Theme).
+ * Deep-link target for opening the modal on a specific surface. Values map:
+ *   - 'account' → opens the Account tab
+ *   - 'theme'   → opens the General tab and scrolls to the Theme section
+ * Undefined → opens the General tab at the top.
  */
-export type SettingsSection = 'profile' | 'theme'
+export type SettingsSection = 'account' | 'theme'
 
 interface SettingsModalProps {
   open: boolean
   onClose: () => void
-  /** Optional section to scroll into view on open. Default: top. */
   initialSection?: SettingsSection
 }
 
 interface Tab {
-  key: string
+  key: TabKey
   label: string
   enabled: boolean
 }
 
 const TABS: Tab[] = [
   { key: 'general', label: 'General', enabled: true },
-  { key: 'account', label: 'Account', enabled: false },
+  { key: 'account', label: 'Account', enabled: true },
   { key: 'privacy', label: 'Privacy', enabled: false },
   { key: 'billing', label: 'Billing', enabled: false },
 ]
 
+const sectionToTab = (section: SettingsSection | undefined): TabKey =>
+  section === 'account' ? 'account' : 'general'
+
 /**
  * App settings surface. Split-pane modal: left rail lists tab sections,
- * right pane renders the active tab's content. Only 'General' is wired
- * today; the rest are placeholder rows with a 'coming soon' tooltip so
- * the shape stays visible for future work.
+ * right pane renders the active tab. General + Account are wired today;
+ * Privacy and Billing remain disabled placeholders so the shape stays
+ * visible for future work.
  *
- * Reusable: any caller can open this and optionally deep-link into a
- * named section via `initialSection`. Dismiss via backdrop click, ESC,
- * or the X button. Never traps focus — no forms inside yet.
+ * `initialSection` is honored once per open: opening the modal re-syncs the
+ * active tab to the requested section. Users can freely tab-switch after
+ * that without the prop dragging them back.
  */
 export function SettingsModal({
   open,
   onClose,
   initialSection,
 }: SettingsModalProps) {
+  const [activeTab, setActiveTab] = useState<TabKey>(() =>
+    sectionToTab(initialSection),
+  )
+  // Reset the active tab every time the modal transitions closed → open so a
+  // caller can deep-link with `initialSection`. Uses the React "storing info
+  // from previous renders" pattern (setState during render, not in effect) —
+  // React bails out and re-renders with the new state before committing.
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) setActiveTab(sectionToTab(initialSection))
+  }
+
   useEffect(() => {
     if (!open) return
     const onKeyDown = (e: KeyboardEvent) => {
@@ -76,7 +95,12 @@ export function SettingsModal({
             Settings
           </h2>
           {TABS.map((tab) => (
-            <TabButton key={tab.key} tab={tab} isActive={tab.key === 'general'} />
+            <TabButton
+              key={tab.key}
+              tab={tab}
+              isActive={tab.key === activeTab}
+              onSelect={() => setActiveTab(tab.key)}
+            />
           ))}
         </aside>
 
@@ -90,7 +114,12 @@ export function SettingsModal({
             <X className="size-4" />
           </button>
           <div className="flex-1 overflow-y-auto p-8">
-            <SettingsGeneralTab initialSection={initialSection} />
+            {activeTab === 'general' && (
+              <SettingsGeneralTab
+                scrollTo={initialSection === 'theme' ? 'theme' : undefined}
+              />
+            )}
+            {activeTab === 'account' && <SettingsAccountTab />}
           </div>
         </div>
       </div>
@@ -98,11 +127,20 @@ export function SettingsModal({
   )
 }
 
-function TabButton({ tab, isActive }: { tab: Tab; isActive: boolean }) {
+function TabButton({
+  tab,
+  isActive,
+  onSelect,
+}: {
+  tab: Tab
+  isActive: boolean
+  onSelect: () => void
+}) {
   return (
     <button
       type="button"
       disabled={!tab.enabled}
+      onClick={tab.enabled ? onSelect : undefined}
       title={tab.enabled ? undefined : `${tab.label} — coming soon`}
       className={cn(
         'flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors',

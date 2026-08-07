@@ -4,6 +4,7 @@ import { useParams } from 'react-router'
 import { ArrowUp, AudioLines, Loader2, Plus, RotateCw, Square } from 'lucide-react'
 import { AttachmentPreviewModal } from '@modules/chat/ui/components/attachment-preview-modal'
 import { AttachmentTile } from '@modules/chat/ui/components/attachment-tile'
+import { ChatAlert } from '@modules/chat/ui/components/chat-alert'
 import { useComposerAttachments } from '@modules/chat/model/use-composer-attachments'
 import {
   PRE_SESSION_KEY,
@@ -126,6 +127,7 @@ export function ChatInput({ disabled }: ChatInputProps) {
   return (
     <div className="px-6 pb-4 pt-2">
       <div className="mx-auto max-w-3xl">
+        <ChatAlert />
         {session.errorBanner && (
           <div
             role="alert"

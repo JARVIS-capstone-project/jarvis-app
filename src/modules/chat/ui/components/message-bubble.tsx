@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { LifeBuoy } from 'lucide-react'
 import { AttachmentPreviewModal } from '@modules/chat/ui/components/attachment-preview-modal'
 import { AttachmentTile } from '@modules/chat/ui/components/attachment-tile'
 import { StoredAttachmentTile } from '@modules/chat/ui/components/stored-attachment-tile'
@@ -10,6 +11,12 @@ import type {
   ChatMessage,
   UploadedDocument,
 } from '@modules/chat/model/types'
+
+// Matches every `**bold**` span in a thinking delta. Gemini's reasoning
+// stream is structured like `**Heading**\n\nBody text...` — we display only
+// the latest heading. `[^*]+` bans `**` from appearing inside so partial /
+// unclosed openings (mid-chunk) don't accidentally match.
+const HEADING_PATTERN = /\*\*([^*]+)\*\*/g
 
 interface MessageBubbleProps {
   message: ChatMessage
@@ -44,9 +51,37 @@ export function MessageBubble({ message, isThinking = false }: MessageBubbleProp
   const hasText = message.content.length > 0
   const hasThinking = !isUser && !hasText && Boolean(message.thinking)
   const [preview, setPreview] = useState<PreviewTarget | null>(null)
+  // Response-time caption above the bubble. Assistant messages only; skipped
+  // on the synthetic "The process was interrupted." marker (no real turn
+  // happened). Populated by hydration (`turn.response_time_ms`) and by the
+  // live path when `turn_end` lands.
+  const showResponseTime =
+    !isUser &&
+    !message.interrupted &&
+    typeof message.responseTimeMs === 'number'
+  // Per-message escalation chip. Persists on THIS bubble even after the
+  // global ChatAlert is dismissed / cleared by a later turn — the tag
+  // belongs to this specific turn, not the current agent state.
+  const showEscalationChip =
+    !isUser && !message.interrupted && message.requiresEscalation === true
 
   return (
-    <div className={cn('flex w-full', isUser && 'justify-end')}>
+    <div className={cn('flex w-full flex-col', isUser && 'items-end')}>
+      {(showResponseTime || showEscalationChip) && (
+        <div className="mb-1 flex items-center gap-2">
+          {showResponseTime && (
+            <p className="text-xs text-muted">
+              Answered in {(message.responseTimeMs! / 1000).toFixed(1)}s
+            </p>
+          )}
+          {showEscalationChip && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-warning bg-warning-soft px-2 py-0.5 text-xs font-medium text-warning">
+              <LifeBuoy className="size-3" />
+              Human escalation
+            </span>
+          )}
+        </div>
+      )}
       <div
         className={cn(
           'flex flex-col gap-2 text-sm',
@@ -98,15 +133,12 @@ export function MessageBubble({ message, isThinking = false }: MessageBubbleProp
             <Markdown content={message.content} className="wrap-break-word" />
           )
         ) : hasThinking ? (
-          // Rolling reasoning step — verbatim `thinking_delta` from Gemini.
-          // Rendered as markdown so bolded titles look clean, muted-italic
-          // to read as "reasoning" not "answer". Replaced every 0.8s by the
-          // ThinkingQueue drain; disappears the moment the first `text_delta`
-          // lands (patchLastAssistant clears `thinking`).
-          <Markdown
-            content={message.thinking!}
-            className="wrap-break-word italic text-body opacity-80"
-          />
+          // Rolling reasoning step — Gemini streams thinking as
+          // `**Heading**\n\nBody...`. Show ONLY the latest `**Heading**` so
+          // the surface reads as a compact action indicator instead of a
+          // second answer. `Thinking…` fallback covers the pre-first-heading
+          // window (early bytes of a delta before the closing `**` arrives).
+          <ThinkingHeading raw={message.thinking!} />
         ) : (
           // Pre-first-delta gap — between `turn_start` and either the first
           // `thinking_delta` or the first `text_delta`.
@@ -122,6 +154,19 @@ export function MessageBubble({ message, isThinking = false }: MessageBubbleProp
 
 function isLive(a: ChatAttachment | UploadedDocument): a is ChatAttachment {
   return 'file' in a
+}
+
+// Extracts the last `**Heading**` from a streaming thinking buffer and shows
+// it as a compact italic label. Falls back to "Thinking…" when the buffer
+// hasn't produced a complete heading yet.
+function ThinkingHeading({ raw }: { raw: string }) {
+  const matches = [...raw.matchAll(HEADING_PATTERN)]
+  const heading = matches.at(-1)?.[1]?.trim()
+  return (
+    <div className="italic text-body opacity-80 wrap-break-word">
+      {heading || 'Thinking…'}
+    </div>
+  )
 }
 
 // "Thinking" label + three dots pulsing on a staggered delay. Uses the same
