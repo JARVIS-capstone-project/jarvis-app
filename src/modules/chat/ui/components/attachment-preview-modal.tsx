@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { X } from 'lucide-react'
+import { Download, X } from 'lucide-react'
 import {
   useDocumentPreview,
   type PreviewStatus,
@@ -20,7 +20,8 @@ interface Props {
  * Close via X button, backdrop click, or Escape key.
  */
 export function AttachmentPreviewModal({ target, onClose }: Props) {
-  const { url, status, filename, contentType } = useDocumentPreview(target)
+  const { url, downloadUrl, status, filename, contentType } =
+    useDocumentPreview(target)
 
   // Escape closes. Attached at window level — modal is app-scoped chrome.
   useEffect(() => {
@@ -43,22 +44,35 @@ export function AttachmentPreviewModal({ target, onClose }: Props) {
         className="relative flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-panel"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* TODO(BE-two-urls): add a Download button here wired to the
-            `download_url` field once BE returns it (see kb-service.ts).
-            That will also make docx/other non-previewable types actually
-            downloadable from the modal instead of showing a plain link. */}
-        <header className="flex items-center justify-between border-b border-divider px-4 py-3">
+        <header className="flex items-center justify-between gap-2 border-b border-divider px-4 py-3">
           <h3 className="truncate text-sm font-medium text-heading" title={filename}>
             {filename || 'Preview'}
           </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close preview"
-            className="flex size-8 items-center justify-center rounded-md text-body transition-colors hover:bg-hover hover:text-heading"
-          >
-            <X className="size-5" />
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            {/* Download uses an <a download> so blob URLs (live/cache paths)
+                save with the right filename, and BE `download_url` (already
+                signed with attachment disposition) triggers the save via
+                GCS's Content-Disposition. Hidden until we have a URL —
+                loading/expired/error states have nothing to point at. */}
+            {downloadUrl && (
+              <a
+                href={downloadUrl}
+                download={filename || undefined}
+                aria-label={`Download ${filename || 'file'}`}
+                className="flex size-8 items-center justify-center rounded-md text-body transition-colors hover:bg-hover hover:text-heading"
+              >
+                <Download className="size-5" />
+              </a>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close preview"
+              className="flex size-8 items-center justify-center rounded-md text-body transition-colors hover:bg-hover hover:text-heading"
+            >
+              <X className="size-5" />
+            </button>
+          </div>
         </header>
 
         <div className="flex flex-1 items-center justify-center overflow-auto bg-canvas p-4">

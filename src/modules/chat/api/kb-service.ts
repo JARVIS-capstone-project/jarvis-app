@@ -19,21 +19,18 @@ export interface UploadDocumentResponse {
 
 /**
  * Response from GET /api/kb/documents/{sourceId}/content (200).
- * `file_url` is a short-lived V4 signed GCS URL — NEVER persist client-side
- * (see the BE DTO's own contract on this).
+ * Both URLs are short-lived V4 signed GCS URLs (15-min TTL) — NEVER persist
+ * client-side (see the BE DTO's own contract on this).
  *
- * TODO(BE-two-urls): BE will evolve this endpoint to return BOTH a
- *   `preview_url` (signed with response-content-disposition=inline) and a
- *   `download_url` (signed with attachment). Once BE ships:
- *     1. Rename `file_url` -> `preview_url`; add `download_url: string`
- *     2. Update use-document-preview.ts to read `res.preview_url`
- *     3. Add a Download button in attachment-preview-modal.tsx wired to
- *        the download_url (also enables downloading non-previewable types
- *        like docx directly from the modal).
+ * `preview_url` is signed with `response-content-disposition=inline` so the
+ * browser renders it (img/iframe/etc). `download_url` is signed with
+ * `attachment` so the browser saves it — used by the Download button in the
+ * preview modal, and enables saving non-previewable types (docx, etc.).
  */
 export interface DocumentContentResponse {
   source_id: string
-  file_url: string
+  preview_url: string
+  download_url: string
   url_expires_at: string
   filename: string
   content_type: string
