@@ -104,6 +104,10 @@ interface Store {
    *  `/sessions` returns. Copies messages + `streaming` to `toKey`, resets
    *  `fromKey` to empty state. Assumes `toKey` was just ensured (fresh). */
   migrateSession: (fromKey: string, toKey: string) => void
+  /** Forgets a session's in-memory transcript. Called after a delete so the
+   *  messages don't sit in the store keyed by an id the BE no longer serves —
+   *  and so re-opening a recycled id can't surface the old conversation. */
+  dropSession: (sessionId: string) => void
   /** Replaces the attachments on a specific message. Used to swap the
    *  freshly-picked ChatAttachments seeded on the early user bubble for their
    *  post-upload enriched shape once `/documents` returns. */
@@ -281,6 +285,14 @@ export const useChatSessionStore = create<Store>((set) => ({
           [fromKey]: emptyState(),
         },
       }
+    }),
+
+  dropSession: (sessionId) =>
+    set((s) => {
+      if (!s.byId[sessionId]) return s
+      const next = { ...s.byId }
+      delete next[sessionId]
+      return { byId: next }
     }),
 
   patchMessageAttachments: (sessionId, messageId, attachments) =>

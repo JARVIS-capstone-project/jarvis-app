@@ -3,6 +3,7 @@ import type {
   ChatRequest,
   ChatResponse,
   CreateSessionRequest,
+  DeleteSessionResponse,
   SessionDetail,
   SessionSummary,
   UpdateSessionRequest,
@@ -39,9 +40,17 @@ export const agentService = {
   updateSession: (sessionId: string, body: UpdateSessionRequest) =>
     agentHttpClient.patch<SessionSummary>(`/sessions/${sessionId}`, body),
 
-  /** Delete a session. Not wired in the new-chat flow — reserved. */
+  /**
+   * Delete a session. Soft-deletes the metadata row, drops the ADK session,
+   * and asks Platform to clean up the attachments it carried.
+   *
+   * Returns those attachment `source_id`s, which is what lets the caller
+   * evict the same files from the local blob cache without a second lookup —
+   * the cache is keyed by `source_id` alone and has no idea which session a
+   * file belonged to.
+   */
   deleteSession: (sessionId: string) =>
-    agentHttpClient.delete<void>(`/sessions/${sessionId}`),
+    agentHttpClient.delete<DeleteSessionResponse>(`/sessions/${sessionId}`),
 
   /**
    * Non-streaming send. NOT used by this integration (we use openStream)

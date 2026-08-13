@@ -12,6 +12,15 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), tailwindcss()],
     // Resolve @/*, @app/*, @modules/*, @shared/* from tsconfig (native in Vite 8+).
     resolve: { tsconfigPaths: true },
+    build: {
+      // Raised from the 500 kB default, which measures every chunk the same
+      // way and so cannot tell an eager bundle from a deferred one. Two
+      // chunks sit above it on purpose: the entry (~314 kB gzipped, ordinary
+      // for React + markdown + pdf.js) and `reactor-model` (three.js, split
+      // out and only fetched by the landing hero). Kept well under the sum of
+      // the two so a genuinely runaway chunk still trips the warning.
+      chunkSizeWarningLimit: 1200,
+    },
     server: {
       port: 5173,
       // Dev proxies:

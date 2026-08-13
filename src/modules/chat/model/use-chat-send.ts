@@ -241,6 +241,14 @@ export function useChatSend(): UseChatSendResult {
                     alertCode = 'requires_escalation'
                     store.setAlert('requires_escalation')
                   }
+                  // Sidebar row tracks the message that just landed. Skipped
+                  // for a rolled-back turn: BE reverted it, so the preview
+                  // would name a message the next refetch won't return.
+                  if (!frame.data.rolled_back) {
+                    useSessionsStore
+                      .getState()
+                      .touchSession(sid!, snapshot.text)
+                  }
                 }
                 // thinking_end / tool_* / warning / turn_start / citation —
                 // typed for parser safety but not wired to UI yet.
@@ -442,6 +450,14 @@ export function useChatSend(): UseChatSendResult {
                   if (frame.data.requires_escalation && !alertCode) {
                     alertCode = 'requires_escalation'
                     store.setAlert('requires_escalation')
+                  }
+                  // Same sidebar refresh as the send path. `last` is the
+                  // user message this resume re-fired, so the preview lands
+                  // on the same text a refetch would return.
+                  if (!frame.data.rolled_back) {
+                    useSessionsStore
+                      .getState()
+                      .touchSession(sessionId, last.content)
                   }
                 }
               },

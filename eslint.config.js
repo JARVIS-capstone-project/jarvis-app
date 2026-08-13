@@ -22,6 +22,14 @@ export default tseslint.config(
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },
+  // Route tables pair a data export (the route array) with the lazy component
+  // references it points at, which is exactly the shape this rule flags. They
+  // are never a fast-refresh boundary — editing one remounts the router
+  // regardless — so the warning has nothing to protect here.
+  {
+    files: ['**/routes.tsx', '**/router/routes.tsx'],
+    rules: { 'react-refresh/only-export-components': 'off' },
+  },
   // Config files run in Node, not the browser.
   {
     files: ['vite.config.ts', '*.config.{js,ts}'],

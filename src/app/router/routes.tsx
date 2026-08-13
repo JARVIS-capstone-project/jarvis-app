@@ -1,10 +1,20 @@
+import { lazy } from 'react'
 import type { RouteObject } from 'react-router'
 import { AppLayout } from '@app/layout/app-layout'
 import { landingRoutes } from '@modules/landing'
-import { DevIndexPage, designRoutes } from '@modules/design'
+import { designRoutes } from '@modules/design'
 import { authRoutes } from '@modules/auth'
 import { chatRoutes } from '@modules/chat'
 import { adminRoutes } from '@modules/admin/routes'
+
+// Imported from the page module rather than the `design` barrel: the barrel
+// also re-exports `designRoutes`, and pulling both through one specifier
+// would defeat the split by tying this chunk to that module graph.
+const DevIndexPage = lazy(() =>
+  import('@modules/design/ui/pages/dev-index-page').then((m) => ({
+    default: m.DevIndexPage,
+  })),
+)
 
 /**
  * Each feature module owns and exports its own routes; the app shell only

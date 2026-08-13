@@ -1,10 +1,42 @@
+import { lazy } from 'react'
 import { Navigate, type RouteObject } from 'react-router'
 import { RequireRole } from '@app/router/require-role'
-import { AdminShellPage } from '@modules/admin/ui/pages/admin-shell-page'
-import { AdminUsersPage } from '@modules/admin/ui/pages/admin-users-page'
-import { AdminUserDetailPage } from '@modules/admin/ui/pages/admin-user-detail-page'
-import { AdminAuditPage } from '@modules/admin/ui/pages/admin-audit-page'
-import { AdminSystemPage } from '@modules/admin/ui/pages/admin-system-page'
+
+/**
+ * Every admin page is code-split. The surface is reachable by admins only —
+ * `RequireRole` redirects everyone else before a child mounts — so shipping
+ * these in the main bundle charged every ordinary user for a screen they can
+ * never open.
+ *
+ * The shell is split alongside its children rather than kept eager: it is the
+ * admin chrome and has no reason to load for anyone who never reaches
+ * `/admin`. Suspense is handled once, at `AppRouter`.
+ */
+const AdminShellPage = lazy(() =>
+  import('@modules/admin/ui/pages/admin-shell-page').then((m) => ({
+    default: m.AdminShellPage,
+  })),
+)
+const AdminUsersPage = lazy(() =>
+  import('@modules/admin/ui/pages/admin-users-page').then((m) => ({
+    default: m.AdminUsersPage,
+  })),
+)
+const AdminUserDetailPage = lazy(() =>
+  import('@modules/admin/ui/pages/admin-user-detail-page').then((m) => ({
+    default: m.AdminUserDetailPage,
+  })),
+)
+const AdminAuditPage = lazy(() =>
+  import('@modules/admin/ui/pages/admin-audit-page').then((m) => ({
+    default: m.AdminAuditPage,
+  })),
+)
+const AdminSystemPage = lazy(() =>
+  import('@modules/admin/ui/pages/admin-system-page').then((m) => ({
+    default: m.AdminSystemPage,
+  })),
+)
 
 /**
  * Admin route group. All routes are gated by `RequireRole role="ADMIN"` at

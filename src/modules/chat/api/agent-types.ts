@@ -38,6 +38,16 @@ export interface SessionDetail extends SessionSummary {
   messages: MessageDTO[]
 }
 
+/**
+ * `DELETE /sessions/{id}`. The `source_id`s are returned for traceability —
+ * they say what the session carried, not whether Platform's own cleanup
+ * succeeded for each one (that path is fail-open by design). The FE uses them
+ * to evict the matching entries from the local blob cache.
+ */
+export interface DeleteSessionResponse {
+  source_ids: string[]
+}
+
 export interface MessageDTO {
   role: string
   content: string
@@ -127,5 +137,10 @@ export type SseFrame =
         ok?: boolean
         error?: string | null
         response_time_ms?: number
+        /** BE reverted the turn (no answer reached the user, or the
+         *  faithfulness gate withheld it). The turn does not exist server-side,
+         *  so nothing derived from it — sidebar previews included — should
+         *  outlive the stream. */
+        rolled_back?: boolean
       }
     }
