@@ -1,11 +1,40 @@
 import type { ComponentPropsWithoutRef, HTMLAttributes } from 'react'
-import ReactMarkdown from 'react-markdown'
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { cn } from '@shared/lib/cn'
 
 type MarkdownProps = HTMLAttributes<HTMLDivElement> & {
   /** Raw markdown content. */
   content: string
+}
+
+/**
+ * The BE's citation scheme (`private_kb/citations.py`, `CITE_SCHEME`). The
+ * agent rewrites `[<id>]` markers in an answer into `[label](cite:<id>)`, so
+ * the reader sees a document name while the id stays machine-addressable.
+ *
+ * These are references, not destinations — see the `a` override.
+ */
+const CITE_SCHEME = 'cite:'
+
+/**
+ * Let `cite:` reach the `a` override intact; everything else keeps
+ * react-markdown's own sanitiser.
+ *
+ * Without this the feature is silently inert. `defaultUrlTransform` allows only
+ * `http(s)`, `irc(s)`, `mailto` and `xmpp`, and rewrites anything else to the
+ * empty string — so `cite:` arrives as `href=""`, the override's check fails,
+ * and the citation renders as a live anchor whose empty href resolves to the
+ * *current page*. Clicking one would open a second copy of the app.
+ *
+ * Passing the scheme through is safe because it never reaches the DOM: the
+ * override drops `href` and renders a `<span>`. That branch is now the only
+ * thing keeping it off — do not remove one without the other. `javascript:`
+ * and friends are still blanked here, and the BE only ever emits `cite:` for
+ * ids that resolve against the turn's own retrieved sources.
+ */
+function urlTransform(url: string): string {
+  return url.startsWith(CITE_SCHEME) ? url : defaultUrlTransform(url)
 }
 
 /**
@@ -31,6 +60,7 @@ export function Markdown({ content, className, ...props }: MarkdownProps) {
     >
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        urlTransform={urlTransform}
         components={{
           h1: (p) => (
             <h1 {...stripNode(p)} className={cn('mb-3 mt-5 text-lg font-semibold text-heading', p.className)} />
@@ -53,17 +83,38 @@ export function Markdown({ content, className, ...props }: MarkdownProps) {
           li: (p) => (
             <li {...stripNode(p)} className={cn('leading-relaxed', p.className)} />
           ),
-          a: (p) => (
-            <a
-              {...stripNode(p)}
-              className={cn(
-                'text-brand underline decoration-brand/40 transition-colors hover:text-brand-hover hover:decoration-brand-hover',
-                p.className,
-              )}
-              target="_blank"
-              rel="noreferrer noopener"
-            />
-          ),
+          a: (p) => {
+            // A citation names a document, not a place to go: KB sources have
+            // no user-facing URL at all, and an attachment is already reachable
+            // from the tile on the user's own message. So it is rendered with
+            // weight and colour but no link affordance — no underline, no
+            // pointer, not in the tab order.
+            //
+            // Dropping `href` is what keeps a model-authored `cite:` target
+            // off the DOM — `urlTransform` above deliberately waves the scheme
+            // past react-markdown's sanitiser so this branch can see it.
+            if (p.href?.startsWith(CITE_SCHEME)) {
+              const { href: _href, ...rest } = stripNode(p)
+              void _href
+              return (
+                <span
+                  {...rest}
+                  className={cn('font-medium text-brand', p.className)}
+                />
+              )
+            }
+            return (
+              <a
+                {...stripNode(p)}
+                className={cn(
+                  'text-brand underline decoration-brand/40 transition-colors hover:text-brand-hover hover:decoration-brand-hover',
+                  p.className,
+                )}
+                target="_blank"
+                rel="noreferrer noopener"
+              />
+            )
+          },
           strong: (p) => (
             <strong {...stripNode(p)} className={cn('font-semibold text-heading', p.className)} />
           ),
@@ -130,7 +181,7 @@ function stripNode<T extends { node?: unknown }>(props: T): Omit<T, 'node'> {
 }
 
 /**
- * Custom `code` handler — inline vs fenced-block. In react-markdown v9 the
+ * Custom `code` handler — inline vs fenced-block. In react-markdown v9+ the
  * `inline` boolean is gone; the discriminator is the parent (`<pre>`) or
  * the presence of a `language-*` className added by remark for fenced blocks.
  */

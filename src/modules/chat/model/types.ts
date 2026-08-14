@@ -4,7 +4,29 @@
  * their tickets ship).
  */
 
+import type { CitationRef } from '@modules/chat/api/agent-types'
+
 export type MessageRole = 'user' | 'assistant'
+
+/**
+ * Which producer a status line came from, and therefore how its text is read.
+ *
+ * `thinking` is Gemini's raw reasoning stream — `**Heading**\n\nBody…` — where
+ * only the latest heading is worth showing. The validation kinds are finished
+ * sentences from the faithfulness gate and are rendered whole.
+ *
+ * `validation-error` is separate from `validation` rather than a flag on it:
+ * "the check could not run" is not a finding about the answer, and a surface
+ * that rendered the two alike would teach an operator to read a broken judge
+ * as a clean bill of health.
+ */
+export type StatusLineKind = 'thinking' | 'validation' | 'validation-error'
+
+/** One line of the pre-answer status pane. */
+export interface StatusLine {
+  kind: StatusLineKind
+  text: string
+}
 
 /**
  * A file the user attached in the composer. Held entirely client-side as
@@ -38,12 +60,13 @@ export interface ChatMessage {
   /** Unix ms — set at append time via Date.now(). */
   createdAt: number
   /**
-   * Currently-displayed `thinking_delta` for a live assistant message. Rolling
-   * status — each new delta REPLACES this (not accumulates). Cleared as soon
+   * Currently-displayed status line for a live assistant message — the model's
+   * reasoning, or the faithfulness gate's progress. Rolling: each new line
+   * REPLACES this (not accumulates), paced by `StatusQueue`. Cleared as soon
    * as the first `text_delta` lands so `content` takes over. Never persisted:
    * only exists during an active stream, always undefined post-turn_end.
    */
-  thinking?: string | null
+  status?: StatusLine | null
   /**
    * True when this message is a synthetic "The process was interrupted."
    * marker written client-side after hydration detected the previous stream
@@ -78,6 +101,13 @@ export interface ChatMessage {
    * stream, so the user sees it in two places (banner AND per-message).
    */
   requiresEscalation?: boolean | null
+  /**
+   * Documents this answer rests on, resolved for display. Assistant messages
+   * only. Populated on hydration (`turn.citation_refs`) and on the live path
+   * when `turn_end` arrives — the BE emits the same shape on both, so the
+   * rendered list does not depend on how the message reached the client.
+   */
+  citationRefs?: CitationRef[] | null
 }
 
 /**

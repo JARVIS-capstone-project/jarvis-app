@@ -1,7 +1,9 @@
 import { create } from 'zustand'
+import type { CitationRef } from '@modules/chat/api/agent-types'
 import type {
   ChatAttachment,
   ChatMessage,
+  StatusLine,
   UploadedDocument,
 } from '@modules/chat/model/types'
 
@@ -75,18 +77,21 @@ interface Store {
    *  hook guards against that). */
   setMessages: (sessionId: string, messages: ChatMessage[]) => void
   /** Append a delta to the LAST assistant message. Also clears any lingering
-   *  `thinking` (text is starting, thinking display is done). No-op if the last
+   *  `status` (text is starting, the status line is done). No-op if the last
    *  message isn't from the assistant (defensive against out-of-order frames). */
   patchLastAssistant: (sessionId: string, delta: string) => void
-  /** Replace the LAST assistant message's rolling thinking text. Called by the
-   *  thinking-queue drain — one thinking_delta at a time, spaced 0.8s. */
-  setLastAssistantThinking: (sessionId: string, text: string | null) => void
+  /** Replace the LAST assistant message's rolling status line. Called by the
+   *  status-queue drain — one line at a time, spaced 0.8s. */
+  setLastAssistantStatus: (sessionId: string, line: StatusLine | null) => void
   /** Stamp `response_time_ms` on the LAST assistant message. Called by the
    *  stream on `turn_end`. No-op if the last message isn't assistant. */
   setLastAssistantResponseTime: (sessionId: string, ms: number) => void
   /** Stamp `requires_escalation` on the LAST assistant message. Same
    *  lifecycle as `setLastAssistantResponseTime`. */
   setLastAssistantEscalation: (sessionId: string, v: boolean) => void
+  /** Attach the turn's resolved citations to the LAST assistant message. Same
+   *  lifecycle as `setLastAssistantResponseTime`. */
+  setLastAssistantCitations: (sessionId: string, refs: CitationRef[]) => void
   setStreaming: (sessionId: string, v: boolean) => void
   /** Flip while `GET /sessions/{id}` is in flight. */
   setHydrating: (sessionId: string, v: boolean) => void
@@ -177,23 +182,23 @@ export const useChatSessionStore = create<Store>((set) => ({
       const msgs = [...cur.messages]
       const last = msgs[msgs.length - 1]
       if (!last || last.role !== 'assistant') return s
-      // Clear `thinking` unconditionally: once text starts flowing, the
-      // thinking-status line has served its purpose and should disappear.
+      // Clear `status` unconditionally: once text starts flowing, the status
+      // line has served its purpose and should disappear.
       msgs[msgs.length - 1] = {
         ...last,
         content: last.content + delta,
-        thinking: null,
+        status: null,
       }
       return { byId: { ...s.byId, [sessionId]: { ...cur, messages: msgs } } }
     }),
 
-  setLastAssistantThinking: (sessionId, text) =>
+  setLastAssistantStatus: (sessionId, line) =>
     set((s) => {
       const cur = s.byId[sessionId] ?? emptyState()
       const msgs = [...cur.messages]
       const last = msgs[msgs.length - 1]
       if (!last || last.role !== 'assistant') return s
-      msgs[msgs.length - 1] = { ...last, thinking: text }
+      msgs[msgs.length - 1] = { ...last, status: line }
       return { byId: { ...s.byId, [sessionId]: { ...cur, messages: msgs } } }
     }),
 
@@ -214,6 +219,16 @@ export const useChatSessionStore = create<Store>((set) => ({
       const last = msgs[msgs.length - 1]
       if (!last || last.role !== 'assistant') return s
       msgs[msgs.length - 1] = { ...last, requiresEscalation: v }
+      return { byId: { ...s.byId, [sessionId]: { ...cur, messages: msgs } } }
+    }),
+
+  setLastAssistantCitations: (sessionId, refs) =>
+    set((s) => {
+      const cur = s.byId[sessionId] ?? emptyState()
+      const msgs = [...cur.messages]
+      const last = msgs[msgs.length - 1]
+      if (!last || last.role !== 'assistant') return s
+      msgs[msgs.length - 1] = { ...last, citationRefs: refs }
       return { byId: { ...s.byId, [sessionId]: { ...cur, messages: msgs } } }
     }),
 

@@ -60,6 +60,32 @@ export interface MessageDTO {
 export interface MessageTurnDTO {
   response_time_ms?: number
   requires_escalation?: boolean
+  citation_refs?: CitationRef[]
+}
+
+/**
+ * One validated citation, resolved for display. Arrives on both paths — the
+ * `turn` block of `GET /sessions/{id}` and the `turn_end` frame — in the same
+ * shape, so one renderer serves history and live turns alike.
+ *
+ * Deduplicated by the BE: a document cited three times in one answer appears
+ * here once, and all three inline `cite:` links point back to this entry.
+ */
+export interface CitationRef {
+  /** Raw id. Matches the `cite:` target of the answer's inline links. */
+  source_id: string
+  /** `knowledge` — a curated KB document; `attachment` — a file this user uploaded. */
+  kind: 'knowledge' | 'attachment'
+  /** How far to trust this source. Read this rather than deriving it from
+   *  `kind` — the BE contract reserves the right to add a source type (web,
+   *  MCP) that sets this without changing what `kind` means. */
+  file_status: 'verified' | 'untrusted'
+  /** What to show the user: the KB path, or their own filename. */
+  label: string
+  /** Gateway-relative content endpoint for the user's own files; `null` for KB
+   *  documents, which ship inside the agent and have no endpoint. Unused today
+   *  — nothing in the citation UI is clickable. */
+  url: string | null
 }
 
 /* ---------- Chat / attachments ------------------------------------------- */
@@ -123,6 +149,38 @@ export type SseFrame =
   | { event: 'tool_result'; data: { tool_name: string; success: boolean } }
   | { event: 'warning'; data: { message: string } }
   | { event: 'error'; data: { message: string; code?: string } }
+  // The faithfulness gate, when it runs. Conditional by design: the BE stands
+  // it down for an empty answer, for a turn that retrieved nothing, and for one
+  // that already declined — so a turn can go straight from `tool_result` to
+  // `text_delta` with none of these frames. Never block the answer on them.
+  | { event: 'validation_start'; data: { message: string } }
+  | {
+      event: 'validation_sources'
+      data: {
+        sources: { path: string; title: string; snippet: string }[]
+        count: number
+      }
+    }
+  | {
+      event: 'validation_result'
+      data: {
+        /** No `'unavailable'` here — the BE routes that case to
+         *  `validation_error` so a judge that could not run never reads as a
+         *  finding about the answer. */
+        status: 'verified' | 'partial' | 'unsupported'
+        score: number
+        message: string
+        reason: string
+        /** Counts only. The claims themselves are withheld on the refusal path,
+         *  where that text IS the answer the gate declined to show. */
+        supported_claims: number
+        unsupported_claims: number
+        sources_used: string[]
+      }
+    }
+  /** Fires INSTEAD of `validation_result` when the judge itself failed. The
+   *  turn fails closed: the answer is withheld and rolled back. */
+  | { event: 'validation_error'; data: { message: string; code: string } }
   | {
       event: 'turn_end'
       data: {
@@ -142,5 +200,8 @@ export type SseFrame =
          *  so nothing derived from it — sidebar previews included — should
          *  outlive the stream. */
         rolled_back?: boolean
+        /** Same shape the history path returns, so the citation UI is fed
+         *  identically whether a message was streamed or hydrated. */
+        citation_refs?: CitationRef[]
       }
     }

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { LifeBuoy } from 'lucide-react'
 import { AttachmentPreviewModal } from '@modules/chat/ui/components/attachment-preview-modal'
 import { AttachmentTile } from '@modules/chat/ui/components/attachment-tile'
+import { CitationList } from '@modules/chat/ui/components/citation-list'
 import { StoredAttachmentTile } from '@modules/chat/ui/components/stored-attachment-tile'
 import type { PreviewTarget } from '@modules/chat/model/use-document-preview'
 import { cn } from '@shared/lib/cn'
@@ -9,14 +10,9 @@ import { Markdown } from '@shared/ui/markdown'
 import type {
   ChatAttachment,
   ChatMessage,
+  StatusLine,
   UploadedDocument,
 } from '@modules/chat/model/types'
-
-// Matches every `**bold**` span in a thinking delta. Gemini's reasoning
-// stream is structured like `**Heading**\n\nBody text...` — we display only
-// the latest heading. `[^*]+` bans `**` from appearing inside so partial /
-// unclosed openings (mid-chunk) don't accidentally match.
-const HEADING_PATTERN = /\*\*([^*]+)\*\*/g
 
 interface MessageBubbleProps {
   message: ChatMessage
@@ -49,7 +45,7 @@ export function MessageBubble({ message, isThinking = false }: MessageBubbleProp
   const isUser = message.role === 'user'
   const hasAttachments = Boolean(message.attachments && message.attachments.length > 0)
   const hasText = message.content.length > 0
-  const hasThinking = !isUser && !hasText && Boolean(message.thinking)
+  const hasStatus = !isUser && !hasText && Boolean(message.status)
   const [preview, setPreview] = useState<PreviewTarget | null>(null)
   // Response-time caption above the bubble. Assistant messages only; skipped
   // on the synthetic "The process was interrupted." marker (no real turn
@@ -132,19 +128,22 @@ export function MessageBubble({ message, isThinking = false }: MessageBubbleProp
             // react-markdown does not render raw HTML by default.
             <Markdown content={message.content} className="wrap-break-word" />
           )
-        ) : hasThinking ? (
-          // Rolling reasoning step — Gemini streams thinking as
-          // `**Heading**\n\nBody...`. Show ONLY the latest `**Heading**` so
-          // the surface reads as a compact action indicator instead of a
-          // second answer. `Thinking…` fallback covers the pre-first-heading
-          // window (early bytes of a delta before the closing `**` arrives).
-          <ThinkingHeading raw={message.thinking!} />
+        ) : hasStatus ? (
+          // Rolling status step — the model's reasoning, or the faithfulness
+          // gate's progress. Paced by `StatusQueue` at one line per 0.8s.
+          <StatusLineView line={message.status!} />
         ) : (
           // Pre-first-delta gap — between `turn_start` and either the first
           // `thinking_delta` or the first `text_delta`.
           isThinking && <ThinkingIndicator />
         )}
       </div>
+      {/* Sources this answer rests on. Below the content so it reads as a
+          footnote, and appended rather than inserted so the arrival of
+          `turn_end` does not shift the text the user is already reading. */}
+      {!isUser && !message.interrupted && message.citationRefs?.length ? (
+        <CitationList refs={message.citationRefs} />
+      ) : null}
       {preview && (
         <AttachmentPreviewModal target={preview} onClose={() => setPreview(null)} />
       )}
@@ -159,12 +158,27 @@ function isLive(a: ChatAttachment | UploadedDocument): a is ChatAttachment {
 // Extracts the last `**Heading**` from a streaming thinking buffer and shows
 // it as a compact italic label. Falls back to "Thinking…" when the buffer
 // hasn't produced a complete heading yet.
-function ThinkingHeading({ raw }: { raw: string }) {
-  const matches = [...raw.matchAll(HEADING_PATTERN)]
-  const heading = matches.at(-1)?.[1]?.trim()
+/**
+ * One line of the pre-answer status pane.
+ *
+ * Every kind arrives display-ready — `StatusStream` has already reduced the
+ * reasoning stream to its heading — so this only picks the tone. Rendered as
+ * text, never markdown: the judge's `reason` is prose written about untrusted
+ * source material and gets no richer treatment than a sentence.
+ */
+function StatusLineView({ line }: { line: StatusLine }) {
   return (
-    <div className="italic text-body opacity-80 wrap-break-word">
-      {heading || 'Thinking…'}
+    <div
+      className={cn(
+        'italic wrap-break-word',
+        // A judge that could not run is not a verdict about the answer, and
+        // must not be able to read as one.
+        line.kind === 'validation-error'
+          ? 'text-warning'
+          : 'text-body opacity-80',
+      )}
+    >
+      {line.text}
     </div>
   )
 }

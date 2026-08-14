@@ -112,6 +112,7 @@ function fromMessageDto(dto: MessageDTO): ChatMessage {
     // Only assistant messages carry `turn`; the BE returns null for user rows.
     responseTimeMs: dto.turn?.response_time_ms ?? null,
     requiresEscalation: dto.turn?.requires_escalation ?? null,
+    citationRefs: dto.turn?.citation_refs ?? null,
   }
 }
 

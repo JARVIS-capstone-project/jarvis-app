@@ -8,7 +8,7 @@ import {
   type ChatAlertCode,
 } from '@modules/chat/model/chat-session-store'
 import { useSessionsStore } from '@modules/chat/model/sessions-store'
-import { ThinkingQueue } from '@modules/chat/model/thinking-queue'
+import { StatusStream } from '@modules/chat/model/status-stream'
 import { useSseStream } from '@modules/chat/model/use-sse-stream'
 import { useUploadDocuments } from '@modules/chat/model/use-upload-documents'
 import type {
@@ -179,10 +179,10 @@ export function useChatSend(): UseChatSendResult {
         // can reject the outer Promise on `turn_end` (BE emits error THEN
         // turn_end — see orchestrator.py fallback paths).
         let agentError: string | null = null
-        // Per-stream thinking queue — throttles thinking_delta display to
+        // Per-stream status pane — paces reasoning and validation lines at
         // 0.8s each and buffers text_delta until the queue drains.
-        const thinking = new ThinkingQueue({
-          onThinking: (text) => store.setLastAssistantThinking(sid!, text),
+        const status = new StatusStream({
+          onStatus: (line) => store.setLastAssistantStatus(sid!, line),
           onText: (delta) => store.patchLastAssistant(sid!, delta),
         })
         await new Promise<void>((resolve, reject) => {
@@ -191,11 +191,10 @@ export function useChatSend(): UseChatSendResult {
             { message: snapshot.text, attachments: attachmentsIn },
             {
               onFrame: (frame) => {
-                if (frame.event === 'text_delta') {
-                  thinking.addText(frame.data.delta)
-                } else if (frame.event === 'thinking_delta') {
-                  thinking.addThinking(frame.data.delta)
-                } else if (frame.event === 'error') {
+                // Thinking, validation and the answer text all go to the status
+                // pane; only what carries turn state is handled below.
+                if (status.accept(frame)) return
+                if (frame.event === 'error') {
                   agentError = frame.data.message || 'Agent error'
                   const mapped = frame.data.code
                     ? ALERT_CODES[frame.data.code]
@@ -241,6 +240,15 @@ export function useChatSend(): UseChatSendResult {
                     alertCode = 'requires_escalation'
                     store.setAlert('requires_escalation')
                   }
+                  // Sources this answer rests on. Length-guarded so a turn that
+                  // cited nothing cannot blank a list already on the message,
+                  // and skipped on a rollback: the gate withheld the answer and
+                  // replaced it with a refusal, so green "Verified" badges under
+                  // "the sources do not support this" would say the opposite of
+                  // what just happened.
+                  if (!frame.data.rolled_back && frame.data.citation_refs?.length) {
+                    store.setLastAssistantCitations(sid!, frame.data.citation_refs)
+                  }
                   // Sidebar row tracks the message that just landed. Skipped
                   // for a rolled-back turn: BE reverted it, so the preview
                   // would name a message the next refetch won't return.
@@ -250,16 +258,25 @@ export function useChatSend(): UseChatSendResult {
                       .touchSession(sid!, snapshot.text)
                   }
                 }
-                // thinking_end / tool_* / warning / turn_start / citation —
+                // thinking_end / tool_* / warning / turn_start —
                 // typed for parser safety but not wired to UI yet.
               },
               onDone: (result) => {
-                // Flush any buffered text and stop the drain timer before
-                // we flip streaming off — otherwise a straggler chunk could
-                // land after `setStreaming(false)` and look like a bug.
-                thinking.dispose()
-                store.setLastAssistantThinking(sid!, null)
-                store.setStreaming(sid!, false)
+                // Clearing the status line and re-enabling the composer are
+                // deferred into the settle callback: the gate's verdict lands
+                // one frame before `turn_end`, so doing either now would wipe
+                // the line the user is mid-way through reading.
+                const settled = () => {
+                  store.setLastAssistantStatus(sid!, null)
+                  store.setStreaming(sid!, false)
+                }
+                // A failed or aborted turn keeps nothing queued — the
+                // commentary is not worth waiting on once the turn is lost.
+                if (result.ok && !agentError) status.finish(settled)
+                else {
+                  status.abandon()
+                  settled()
+                }
                 if (agentError) reject(new Error(agentError))
                 else if (result.ok) {
                   // Only clear when THIS turn didn't itself raise an alert —
@@ -405,8 +422,8 @@ export function useChatSend(): UseChatSendResult {
       // frame BEFORE `turn_end`, so we buffer it and reject on turn_end.
       let agentError: string | null = null
       let alertCode: ChatAlertCode | null = null
-      const thinking = new ThinkingQueue({
-        onThinking: (text) => store.setLastAssistantThinking(sessionId, text),
+      const status = new StatusStream({
+        onStatus: (line) => store.setLastAssistantStatus(sessionId, line),
         onText: (delta) => store.patchLastAssistant(sessionId, delta),
       })
       try {
@@ -416,11 +433,9 @@ export function useChatSend(): UseChatSendResult {
             { message: last.content, attachments: attachmentsIn },
             {
               onFrame: (frame) => {
-                if (frame.event === 'text_delta') {
-                  thinking.addText(frame.data.delta)
-                } else if (frame.event === 'thinking_delta') {
-                  thinking.addThinking(frame.data.delta)
-                } else if (frame.event === 'error') {
+                // Same split as the send path — see there.
+                if (status.accept(frame)) return
+                if (frame.event === 'error') {
                   agentError = frame.data.message || 'Agent error'
                   const mapped = frame.data.code
                     ? ALERT_CODES[frame.data.code]
@@ -451,6 +466,14 @@ export function useChatSend(): UseChatSendResult {
                     alertCode = 'requires_escalation'
                     store.setAlert('requires_escalation')
                   }
+                  // Same rollback guard as the send path — a withheld answer
+                  // must not carry a verified-sources list.
+                  if (!frame.data.rolled_back && frame.data.citation_refs?.length) {
+                    store.setLastAssistantCitations(
+                      sessionId,
+                      frame.data.citation_refs,
+                    )
+                  }
                   // Same sidebar refresh as the send path. `last` is the
                   // user message this resume re-fired, so the preview lands
                   // on the same text a refetch would return.
@@ -462,9 +485,16 @@ export function useChatSend(): UseChatSendResult {
                 }
               },
               onDone: (result) => {
-                thinking.dispose()
-                store.setLastAssistantThinking(sessionId, null)
-                store.setStreaming(sessionId, false)
+                // Deferred for the same reason as the send path — see there.
+                const settled = () => {
+                  store.setLastAssistantStatus(sessionId, null)
+                  store.setStreaming(sessionId, false)
+                }
+                if (result.ok && !agentError) status.finish(settled)
+                else {
+                  status.abandon()
+                  settled()
+                }
                 if (agentError) reject(new Error(agentError))
                 else if (result.ok) {
                   if (!alertCode) store.clearAlert()
