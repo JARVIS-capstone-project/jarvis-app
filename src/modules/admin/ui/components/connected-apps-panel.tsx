@@ -4,7 +4,7 @@ import {
   type McpConnectionStatus,
   type McpConnectionView,
 } from '@modules/admin/api/mcp-connections-mock'
-import { McpLogo } from '@modules/admin/ui/components/mcp-logo'
+import { McpLogo } from '@shared/ui/mcp-logo'
 import { formatJoined } from '@modules/admin/model/format-date'
 import { Badge, type BadgeVariant } from '@shared/ui/badge'
 import { cn } from '@shared/lib/cn'

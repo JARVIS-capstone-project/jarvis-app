@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { RefreshCw, Users } from 'lucide-react'
 import { adminUsersService } from '@modules/admin/api/admin-users-service'
-import { useEndpoint } from '@modules/admin/model/use-endpoint'
+import { useEndpoint } from '@shared/model/use-endpoint'
 import { PaginationBar } from '@modules/admin/ui/components/pagination-bar'
 import { UserCard } from '@modules/admin/ui/components/user-card'
 import { UserGridSkeleton } from '@modules/admin/ui/components/skeleton-shapes'

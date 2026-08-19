@@ -2,17 +2,14 @@ import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { SettingsGeneralTab } from '@app/layout/settings-general-tab'
 import { SettingsAccountTab } from '@app/layout/settings-account-tab'
+import { ConnectionsTab } from '@modules/connectors/ui/connections-tab'
+import {
+  useSettingsStore,
+  type SettingsSection,
+} from '@shared/model/settings-store'
 import { cn } from '@shared/lib/cn'
 
-type TabKey = 'general' | 'account' | 'privacy' | 'billing'
-
-/**
- * Deep-link target for opening the modal on a specific surface. Values map:
- *   - 'account' → opens the Account tab
- *   - 'theme'   → opens the General tab and scrolls to the Theme section
- * Undefined → opens the General tab at the top.
- */
-export type SettingsSection = 'account' | 'theme'
+type TabKey = 'general' | 'account' | 'connections' | 'privacy' | 'billing'
 
 interface SettingsModalProps {
   open: boolean
@@ -29,12 +26,19 @@ interface Tab {
 const TABS: Tab[] = [
   { key: 'general', label: 'General', enabled: true },
   { key: 'account', label: 'Account', enabled: true },
+  { key: 'connections', label: 'Connections', enabled: true },
   { key: 'privacy', label: 'Privacy', enabled: false },
   { key: 'billing', label: 'Billing', enabled: false },
 ]
 
+const SECTION_TO_TAB: Record<SettingsSection, TabKey> = {
+  account: 'account',
+  theme: 'general',
+  connections: 'connections',
+}
+
 const sectionToTab = (section: SettingsSection | undefined): TabKey =>
-  section === 'account' ? 'account' : 'general'
+  section ? SECTION_TO_TAB[section] : 'general'
 
 /**
  * App settings surface. Split-pane modal: left rail lists tab sections,
@@ -46,6 +50,18 @@ const sectionToTab = (section: SettingsSection | undefined): TabKey =>
  * active tab to the requested section. Users can freely tab-switch after
  * that without the prop dragging them back.
  */
+/**
+ * Mounts the modal once, at the app root, driven by `useSettingsStore`.
+ * Both the sidebar's user row and the composer's MCP menu open it through
+ * that store rather than each holding their own copy.
+ */
+export function SettingsModalHost() {
+  const open = useSettingsStore((s) => s.open)
+  const section = useSettingsStore((s) => s.section)
+  const hide = useSettingsStore((s) => s.hide)
+  return <SettingsModal open={open} onClose={hide} initialSection={section} />
+}
+
 export function SettingsModal({
   open,
   onClose,
@@ -120,6 +136,7 @@ export function SettingsModal({
               />
             )}
             {activeTab === 'account' && <SettingsAccountTab />}
+            {activeTab === 'connections' && <ConnectionsTab />}
           </div>
         </div>
       </div>

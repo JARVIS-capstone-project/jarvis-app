@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { adminAuditService } from '@modules/admin/api/admin-audit-service'
-import { useEndpoint } from '@modules/admin/model/use-endpoint'
+import { useEndpoint } from '@shared/model/use-endpoint'
 import {
   normalizeTurns,
   aggregateSessions,

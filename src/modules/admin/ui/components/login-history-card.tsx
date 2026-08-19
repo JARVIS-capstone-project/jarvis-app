@@ -4,7 +4,7 @@ import {
   adminAuditService,
   type LoginRange,
 } from '@modules/admin/api/admin-audit-service'
-import { useEndpoint } from '@modules/admin/model/use-endpoint'
+import { useEndpoint } from '@shared/model/use-endpoint'
 import { SourceBadge } from '@modules/admin/ui/components/source-badge'
 import { MetricsTableSkeleton } from '@modules/admin/ui/components/skeleton-shapes'
 import { cn } from '@shared/lib/cn'

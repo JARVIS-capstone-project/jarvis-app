@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { ChevronUp, UserRound } from 'lucide-react'
-import { SettingsModal } from '@app/layout/settings-modal'
-import type { SettingsSection } from '@app/layout/settings-modal'
 import { UserMenuPopover } from '@app/layout/user-menu-popover'
+import { settings } from '@shared/model/settings-store'
 import { useTheme } from '@app/providers/theme-context'
 import { useLogout } from '@modules/auth/model/use-logout'
 import { useMe } from '@modules/auth/model/use-me'
@@ -15,26 +14,16 @@ import { useMe } from '@modules/auth/model/use-me'
  * (but who still holds a valid-looking token in localStorage) gets bounced
  * within one page load.
  *
- * Popover state and settings-modal state live here so both surfaces can
- * be dismissed independently and the sidebar itself stays stateless.
- * `settingsSection` lets the popover's Theme item deep-link into the
- * modal's Theme section on open.
+ * Only the popover's own open/closed state lives here. The settings modal is
+ * mounted once at the app root and opened through `settings.open(section)` —
+ * the composer's MCP menu reaches the same dialog, and two owners would mean
+ * two dialogs.
  */
 export function SidebarUser() {
   const { data, loading } = useMe()
   const { theme } = useTheme()
   const { logout } = useLogout()
   const [menuOpen, setMenuOpen] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [settingsSection, setSettingsSection] = useState<
-    SettingsSection | undefined
-  >()
-
-  const openSettings = (section?: SettingsSection) => {
-    setSettingsSection(section)
-    setSettingsOpen(true)
-  }
-
   return (
     <div className="relative">
       <button
@@ -60,15 +49,10 @@ export function SidebarUser() {
       <UserMenuPopover
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
-        onOpenSettings={() => openSettings()}
-        onOpenTheme={() => openSettings('theme')}
+        onOpenSettings={() => settings.open()}
+        onOpenTheme={() => settings.open('theme')}
         onLogout={logout}
         currentTheme={theme}
-      />
-      <SettingsModal
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        initialSection={settingsSection}
       />
     </div>
   )

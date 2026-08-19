@@ -1,7 +1,7 @@
 import { Link, useParams } from 'react-router'
 import { ArrowLeft, RefreshCw } from 'lucide-react'
 import { adminUsersService } from '@modules/admin/api/admin-users-service'
-import { useEndpoint } from '@modules/admin/model/use-endpoint'
+import { useEndpoint } from '@shared/model/use-endpoint'
 import { JobRolePicker } from '@modules/admin/ui/components/job-role-picker'
 import { UserDetailHeader } from '@modules/admin/ui/components/user-detail-header'
 import { ModerationPanel } from '@modules/admin/ui/components/moderation-panel'
