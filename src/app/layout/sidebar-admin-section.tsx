@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router'
-import { Activity, ClipboardList, Shield, Users } from 'lucide-react'
+import { Activity, ClipboardList, Gauge, Shield, ShieldAlert, Users } from 'lucide-react'
 import { useIsAdmin } from '@modules/auth/model/auth-store'
 import { cn } from '@shared/lib/cn'
 
@@ -12,6 +12,8 @@ interface Item {
 const ITEMS: Item[] = [
   { to: '/admin/system', label: 'System', Icon: Activity },
   { to: '/admin/audit', label: 'Audit', Icon: ClipboardList },
+  { to: '/admin/usage', label: 'Usage', Icon: Gauge },
+  { to: '/admin/detection', label: 'Detection', Icon: ShieldAlert },
   { to: '/admin/users', label: 'Users', Icon: Users },
 ]
 

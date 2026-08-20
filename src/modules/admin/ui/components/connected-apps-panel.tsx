@@ -32,7 +32,7 @@ export function ConnectedAppsPanel({ userId }: { userId: string }) {
   const connections = mockConnectionsFor(userId)
 
   return (
-    <section className="flex flex-col gap-3 rounded-xl border border-divider bg-panel p-4">
+    <section className="flex flex-1 flex-col gap-3 rounded-xl border border-divider bg-panel p-4">
       <header>
         <h3 className="font-display text-sm uppercase tracking-widest text-heading">
           Connected apps
@@ -51,8 +51,10 @@ export function ConnectedAppsPanel({ userId }: { userId: string }) {
       </p>
 
       {connections.length === 0 ? (
-        <p className="flex items-center gap-2 rounded-md border border-dashed border-divider px-2.5 py-3 text-xs text-muted">
-          <Plug className="size-3.5 shrink-0" />
+        // `flex-1` + centred: the panel is stretched to match the taller column,
+        // so a top-anchored line would leave the grown space looking unfilled.
+        <p className="flex flex-1 flex-col items-center justify-center gap-2 rounded-md border border-dashed border-divider px-2.5 py-6 text-xs text-muted">
+          <Plug className="size-4 shrink-0" />
           No apps connected.
         </p>
       ) : (

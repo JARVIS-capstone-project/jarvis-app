@@ -6,6 +6,7 @@ import { JobRolePicker } from '@modules/admin/ui/components/job-role-picker'
 import { UserDetailHeader } from '@modules/admin/ui/components/user-detail-header'
 import { ModerationPanel } from '@modules/admin/ui/components/moderation-panel'
 import { ConnectedAppsPanel } from '@modules/admin/ui/components/connected-apps-panel'
+import { InjectionFeed } from '@modules/admin/ui/components/injection-feed'
 import { SkeletonBar, SkeletonBlock } from '@modules/admin/ui/components/skeleton-shapes'
 import { useCurrentUserId } from '@modules/auth/model/auth-store'
 import { cn } from '@shared/lib/cn'
@@ -17,12 +18,24 @@ import { cn } from '@shared/lib/cn'
  * The layout is deliberate. `AdminUserView` has five fields, three of which
  * are the banner's own headline and badges, so a separate facts panel would
  * have been half duplication and would have sat half-empty beside the
- * controls. Instead both columns below hold *actions* — they carry similar
- * weight, so they balance without either being padded to match the other.
+ * controls. Instead both columns below hold *actions*.
  *
- * That projection is also the whole surface: no session list, no login
- * history, no profile. Rather than invent panels the API cannot fill, the
- * page shows what exists and `JobRolePicker` states its own read gap inline.
+ * The two columns stretch to a shared height (no `items-start`), and Connected
+ * apps takes the slack via `flex-1`. Job role is the taller column by a fixed
+ * amount — four radio options with descriptions — so left to their natural
+ * heights the right column ends in dead space that reads as a rendering bug
+ * rather than as breathing room.
+ *
+ * Below them sits the evidence those actions rest on: every turn where
+ * something tried to give the agent orders while this account was driving
+ * (`/admin/audit?injection_only=true&user_id=`). It is full-width and last
+ * because it is what an admin reads *before* reaching for Ban, and it splits
+ * turns the account typed from turns it merely read — only the first is
+ * grounds for anything.
+ *
+ * Beyond those three, the page invents nothing: no session list, no login
+ * history, no profile. `JobRolePicker` states its own read gap inline rather
+ * than showing a value the API will not return.
  */
 export function AdminUserDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -65,9 +78,9 @@ export function AdminUserDetailPage() {
       ) : data ? (
         <>
           <UserDetailHeader user={data} />
-          <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <JobRolePicker userId={data.id} />
-            <div className="flex flex-col gap-4">
+            <div className="flex h-full flex-col gap-4">
               <ModerationPanel
                 user={data}
                 isSelf={data.id === currentUserId}
@@ -76,6 +89,7 @@ export function AdminUserDetailPage() {
               <ConnectedAppsPanel userId={data.id} />
             </div>
           </div>
+          <InjectionFeed userId={data.id} showUser={false} />
         </>
       ) : (
         !error && (
