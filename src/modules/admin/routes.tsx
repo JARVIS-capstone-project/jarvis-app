@@ -32,6 +32,16 @@ const AdminAuditPage = lazy(() =>
     default: m.AdminAuditPage,
   })),
 )
+const AdminUsagePage = lazy(() =>
+  import('@modules/admin/ui/pages/admin-usage-page').then((m) => ({
+    default: m.AdminUsagePage,
+  })),
+)
+const AdminDetectionPage = lazy(() =>
+  import('@modules/admin/ui/pages/admin-detection-page').then((m) => ({
+    default: m.AdminDetectionPage,
+  })),
+)
 const AdminSystemPage = lazy(() =>
   import('@modules/admin/ui/pages/admin-system-page').then((m) => ({
     default: m.AdminSystemPage,
@@ -57,6 +67,8 @@ export const adminRoutes: RouteObject[] = [
       { index: true, element: <Navigate to="system" replace /> },
       { path: 'system', element: <AdminSystemPage /> },
       { path: 'audit', element: <AdminAuditPage /> },
+      { path: 'usage', element: <AdminUsagePage /> },
+      { path: 'detection', element: <AdminDetectionPage /> },
       { path: 'users', element: <AdminUsersPage /> },
       { path: 'users/:id', element: <AdminUserDetailPage /> },
     ],

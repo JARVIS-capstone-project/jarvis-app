@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { adminSystemService } from '@modules/admin/api/admin-system-service'
-import { useEndpoint, type EndpointResult } from '@modules/admin/model/use-endpoint'
+import { useEndpoint, type EndpointResult } from '@shared/model/use-endpoint'
 import { HealthLight } from '@modules/admin/ui/components/health-light'
 import { LoginHistoryCard } from '@modules/admin/ui/components/login-history-card'
 import { SourceBadge, type Source } from '@modules/admin/ui/components/source-badge'

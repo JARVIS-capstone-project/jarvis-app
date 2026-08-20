@@ -54,3 +54,15 @@ export const useIsAuthenticated = () => useAuthStore((s) => Boolean(s.accessToke
 // Uppercase 'ADMIN' matches the platform-issued JWT `roles` claim exactly
 // (see UserRoleConfig.java). Do not lowercase-compare.
 export const useIsAdmin = () => useAuthStore((s) => s.roles.includes('ADMIN'))
+/**
+ * The signed-in admin's own user id, decoded from the token's `sub` claim.
+ *
+ * Derived on read rather than persisted alongside `roles`: adding a field to
+ * the persisted shape would leave every already-signed-in session with it
+ * undefined until the next login, and the one screen that needs it (the admin
+ * roster, to refuse a self-ban) would silently mis-gate for exactly the people
+ * most likely to be logged in already. Decoding is base64 + JSON.parse, and
+ * this store changes about once per session.
+ */
+export const useCurrentUserId = () =>
+  useAuthStore((s) => (s.accessToken ? (decodeAccessToken(s.accessToken)?.sub ?? null) : null))

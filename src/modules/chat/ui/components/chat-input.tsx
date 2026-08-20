@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { useParams } from 'react-router'
 import { ArrowUp, AudioLines, Loader2, Plus, RotateCw, Square } from 'lucide-react'
+import { McpQuickMenu } from '@modules/connectors/ui/mcp-quick-menu'
 import { AttachmentPreviewModal } from '@modules/chat/ui/components/attachment-preview-modal'
 import { AttachmentTile } from '@modules/chat/ui/components/attachment-tile'
 import { ChatAlert } from '@modules/chat/ui/components/chat-alert'
@@ -195,7 +196,10 @@ export function ChatInput({ disabled }: ChatInputProps) {
               'focus:outline-none disabled:cursor-not-allowed',
             )}
           />
-          <div className="mt-2 flex items-center justify-between">
+          {/* Attach + tools sit together on the left; `ml-auto` on the trailing
+              group keeps voice/send right without `justify-between`, which would
+              have spread all three apart once a third child arrived. */}
+          <div className="mt-2 flex items-center gap-2">
             <label
               title="Attach files"
               className={cn(
@@ -219,7 +223,8 @@ export function ChatInput({ disabled }: ChatInputProps) {
               />
               <Plus className="size-4" />
             </label>
-            <div className="flex items-center gap-2">
+            <McpQuickMenu disabled={isBusy} />
+            <div className="ml-auto flex items-center gap-2">
               <button
                 type="button"
                 aria-label="Voice input (coming soon)"

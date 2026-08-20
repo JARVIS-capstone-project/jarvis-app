@@ -137,3 +137,39 @@ export function MetricsTableSkeleton({ rows = 6 }: { rows?: number }) {
     </div>
   )
 }
+
+/** Placeholder that mirrors a <UserCard>: monogram, identity lines, badges. */
+export function UserCardSkeleton() {
+  return (
+    <div
+      aria-hidden
+      className="flex flex-col gap-3 rounded-xl border border-divider bg-panel p-4"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-1 items-center gap-2.5">
+          <SkeletonBlock className="size-8 shrink-0 rounded-full" />
+          <div className="flex-1 space-y-2">
+            <SkeletonBar className="h-3 w-32" />
+            <SkeletonBar className="h-2 w-24" />
+          </div>
+        </div>
+        <SkeletonBar className="h-4 w-6" />
+      </div>
+      <div className="mt-auto flex items-end justify-between gap-2">
+        <SkeletonBar className="h-4 w-16 rounded-full" />
+        <SkeletonBar className="h-4 w-14 rounded-full" />
+      </div>
+    </div>
+  )
+}
+
+/** A full page of user-card placeholders, matching the live grid's columns. */
+export function UserGridSkeleton({ count = 6 }: { count?: number }) {
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {Array.from({ length: count }, (_, i) => (
+        <UserCardSkeleton key={i} />
+      ))}
+    </div>
+  )
+}

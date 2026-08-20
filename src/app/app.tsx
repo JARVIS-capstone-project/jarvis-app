@@ -1,4 +1,5 @@
 import { AppRouter } from '@app/router/app-router'
+import { SettingsModalHost } from '@app/layout/settings-modal'
 import { ToastHost } from '@shared/ui/toast'
 
 export function App() {
@@ -9,6 +10,7 @@ export function App() {
           report its own outcome, and a host mounted inside a route unmounts
           mid-flight when that happens. */}
       <ToastHost />
+      <SettingsModalHost />
     </>
   )
 }
