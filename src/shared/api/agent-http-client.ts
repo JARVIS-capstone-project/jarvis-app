@@ -6,8 +6,22 @@ import { refreshAccessToken } from '@modules/auth/model/refresh-access-token'
  * Sits alongside `http-client.ts` (platform-system) rather than extending
  * it — each client owns one base URL, one auth attach, one error shape.
  *
- * Vite dev-proxy maps `/agent/*` → :8000. In prod the same-origin gateway
- * routes `/agent/*` server-side. Either way, the FE always calls `/agent/…`.
+ * Two deployment shapes, one client:
+ *
+ *   BASE = '/agent'  (default) — same-origin. Something in front routes
+ *     `/agent/*` server-side and strips the prefix: the Vite dev proxy, the
+ *     nginx image in `docker/`, or a GCP LB. Nothing crosses an origin, so
+ *     there is no CORS and no preflight.
+ *
+ *   BASE = absolute URL — the browser calls agent-system directly, for a host
+ *     that cannot route paths (Vercel and other static CDNs). Set
+ *     `VITE_AGENT_BASE_URL` to the service origin with NO `/agent` suffix:
+ *     the prefix only ever existed for a proxy to match on, and agent-system
+ *     mounts its routers at `/sessions`, not `/agent/sessions`.
+ *     Requires `CORS_ALLOW_ORIGINS` on agent-system — see `vercel.md`.
+ *
+ * `new URL(base, origin)` ignores the second argument when the first is
+ * absolute, so both shapes flow through the same two builders below.
  *
  * Every call carries the platform-issued Bearer JWT. Agent-system validates
  * it (RS256 against Platform's public key + gRPC revocation check). On 401
@@ -15,7 +29,7 @@ import { refreshAccessToken } from '@modules/auth/model/refresh-access-token'
  * new access token — same silent-refresh path as `http-client`.
  */
 
-const BASE = '/agent'
+const BASE = import.meta.env.VITE_AGENT_BASE_URL ?? '/agent'
 
 type QueryParams = Record<string, string | number | boolean | undefined>
 
