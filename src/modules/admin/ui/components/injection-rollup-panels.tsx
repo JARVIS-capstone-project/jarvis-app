@@ -1,6 +1,10 @@
 import { Link } from 'react-router'
 import type { InjectionSummary } from '@modules/admin/api/admin-audit-service'
 import { relTime } from '@modules/admin/model/format-date'
+import {
+  patternLabel,
+  patternTooltip,
+} from '@modules/admin/model/injection-patterns'
 import { Badge } from '@shared/ui/badge'
 import { cn } from '@shared/lib/cn'
 
@@ -61,14 +65,15 @@ export function InjectionRollupPanels({ summary, activePattern, onPatternSelect 
                     isActive ? 'bg-hover' : 'hover:bg-hover',
                   )}
                 >
-                  <code
+                  <span
+                    title={patternTooltip(p.pattern)}
                     className={cn(
-                      'min-w-0 flex-1 truncate font-mono text-xs',
+                      'min-w-0 flex-1 truncate text-sm',
                       isActive ? 'text-heading' : 'text-body',
                     )}
                   >
-                    {p.pattern}
-                  </code>
+                    {patternLabel(p.pattern)}
+                  </span>
                   <Badge variant={isActive ? 'brand' : 'neutral'}>{p.turns}</Badge>
                 </button>
               </li>
