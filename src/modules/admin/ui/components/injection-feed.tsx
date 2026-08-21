@@ -8,6 +8,7 @@ import { InjectionCard } from '@modules/admin/ui/components/injection-card'
 import { PaginationBar } from '@modules/admin/ui/components/pagination-bar'
 import { SkeletonBlock } from '@modules/admin/ui/components/skeleton-shapes'
 import { typedByUser } from '@modules/admin/model/injection-origin'
+import { patternLabel } from '@modules/admin/model/injection-patterns'
 import { useEndpoint } from '@shared/model/use-endpoint'
 
 /**
@@ -75,7 +76,7 @@ export function InjectionFeed({ userId, pattern, onClearPattern, showUser = true
             onClick={onClearPattern}
             className="flex items-center gap-1 rounded-md border border-divider bg-surface px-2 py-1 font-mono text-[10px] uppercase tracking-widest text-body transition-colors hover:bg-hover hover:text-heading"
           >
-            {pattern}
+            {patternLabel(pattern)}
             <X className="size-3" />
           </button>
         )}
@@ -97,7 +98,7 @@ export function InjectionFeed({ userId, pattern, onClearPattern, showUser = true
         <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-divider px-4 py-10 text-center">
           <ShieldCheck className="size-5 text-success" />
           <p className="text-sm text-body">
-            {pattern ? `No turns matched ${pattern}` : 'No injection attempts recorded'}
+            {pattern ? `No turns matched ${patternLabel(pattern)}` : 'No injection attempts recorded'}
           </p>
         </div>
       ) : (

@@ -8,6 +8,10 @@ import {
   typedByUser,
 } from '@modules/admin/model/injection-origin'
 import { relTime } from '@modules/admin/model/format-date'
+import {
+  patternLabel,
+  patternTooltip,
+} from '@modules/admin/model/injection-patterns'
 import { Badge } from '@shared/ui/badge'
 import { cn } from '@shared/lib/cn'
 
@@ -69,8 +73,8 @@ export function InjectionCard({ row, showUser = true }: Props) {
         )}
         <div className="ml-auto flex flex-wrap items-center gap-1">
           {patterns.map((p) => (
-            <Badge key={p} variant={byUser ? 'warning' : 'neutral'}>
-              {p}
+            <Badge key={p} variant={byUser ? 'warning' : 'neutral'} title={patternTooltip(p)}>
+              {patternLabel(p)}
             </Badge>
           ))}
         </div>
