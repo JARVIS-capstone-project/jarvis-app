@@ -22,6 +22,7 @@ import { cn } from '@shared/lib/cn'
 const SRC: Record<string, string> = {
   jira: '/mcp/jira.svg',
   slack: '/mcp/slack.svg',
+  notion: '/mcp/notion.svg',
 }
 
 export function McpLogo({

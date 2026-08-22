@@ -77,9 +77,28 @@ export interface ConnectionTestResult {
   error?: string | null
 }
 
+/**
+ * The three connectors this product ships.
+ *
+ * `/mcp/catalog` answers with eight: it also carries `custom`, `web-search`,
+ * `trello`, `datadog` and `github`, which are the platform's suggestions
+ * rather than ours. Rendering "whatever the API returned" would put
+ * connectors outside the product's scope in front of users.
+ *
+ * Order follows this array rather than the response, so the browse grid
+ * stays stable if the platform ever reorders or trims its own catalog.
+ * Dropping `custom` costs nothing — the list view's "Custom" button opens
+ * the same form with no catalog entry behind it.
+ */
+const BROWSABLE_CATALOG_IDS = ['jira', 'slack', 'notion'] as const
+
 export const mcpConnectionsService = {
-  catalog() {
-    return agentHttpClient.get<CatalogEntry[]>('/mcp/catalog')
+  async catalog() {
+    const entries = await agentHttpClient.get<CatalogEntry[]>('/mcp/catalog')
+    const byId = new Map(entries.map((e) => [e.id, e]))
+    return BROWSABLE_CATALOG_IDS.map((id) => byId.get(id)).filter(
+      (e): e is CatalogEntry => e !== undefined,
+    )
   },
   list() {
     return agentHttpClient.get<Connection[]>('/mcp/connections')
