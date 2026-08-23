@@ -90,8 +90,12 @@ export function SessionHistory() {
         )
 
         // Only the open session forces a move; deleting any other row leaves
-        // the user where they were.
-        if (openSessionId === id) navigate('/chat', { replace: true })
+        // the user where they were. `/new` because the session the URL named no
+        // longer exists, and there is no bare `/chat` route — navigating there
+        // matched nothing and rendered a blank page. Same destination
+        // `use-hydrate-session` uses on a 404, so a session that vanishes behaves
+        // identically whether the user deleted it or followed a stale link.
+        if (openSessionId === id) navigate('/new', { replace: true })
 
         toast.success('Conversation deleted')
       } catch {

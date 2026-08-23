@@ -1,5 +1,5 @@
-import { Plug } from 'lucide-react'
-import { cn } from '@shared/lib/cn'
+import { Plug } from "lucide-react";
+import { cn } from "@shared/lib/cn";
 
 /**
  * Provider mark for an MCP catalog entry, served from `public/mcp/`.
@@ -20,20 +20,21 @@ import { cn } from '@shared/lib/cn'
  * announcing "Jira logo, Jira" is noise for a screen reader.
  */
 const SRC: Record<string, string> = {
-  jira: '/mcp/jira.svg',
-  slack: '/mcp/slack.svg',
-}
+  jira: "/mcp/jira.svg",
+  slack: "/mcp/slack.svg",
+  notion: "/mcp/notion.svg",
+};
 
 export function McpLogo({
   catalogId,
-  className = 'size-5',
+  className = "size-5",
 }: {
-  catalogId: string | null | undefined
-  className?: string
+  catalogId: string | null | undefined;
+  className?: string;
 }) {
-  const src = catalogId ? SRC[catalogId] : undefined
+  const src = catalogId ? SRC[catalogId] : undefined;
   if (!src) {
-    return <Plug className={cn('text-muted', className)} aria-hidden="true" />
+    return <Plug className={cn("text-muted", className)} aria-hidden="true" />;
   }
-  return <img src={src} alt="" aria-hidden="true" className={className} />
+  return <img src={src} alt="" aria-hidden="true" className={className} />;
 }
