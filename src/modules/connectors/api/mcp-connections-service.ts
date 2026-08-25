@@ -69,6 +69,15 @@ export interface UpdateConnectionBody {
   headers?: Record<string, string>
 }
 
+/**
+ * Where to send the user to approve a connection. The platform holds the OAuth app
+ * credentials per provider, so the browser never sees or sends one — it only opens
+ * this URL and waits for the connection's status to flip.
+ */
+export interface OAuthAuthorizeResult {
+  authorize_url: string
+}
+
 /** Always HTTP 200 — a broken server is config to show, not an error to raise. */
 export interface ConnectionTestResult {
   ok: boolean
@@ -84,6 +93,10 @@ export const mcpConnectionsService = {
   list() {
     return agentHttpClient.get<Connection[]>('/mcp/connections')
   },
+  /** One connection. Used to poll for `status` flipping after an OAuth redirect. */
+  get(id: string) {
+    return agentHttpClient.get<Connection>(`/mcp/connections/${id}`)
+  },
   add(body: AddConnectionBody) {
     return agentHttpClient.post<Connection>('/mcp/connections', body)
   },
@@ -95,5 +108,16 @@ export const mcpConnectionsService = {
   },
   test(id: string) {
     return agentHttpClient.post<ConnectionTestResult>(`/mcp/connections/${id}/test`)
+  },
+  /**
+   * Mint a fresh consent URL for a connection awaiting login.
+   *
+   * The `state` inside expires after ten minutes, so this is called again rather than
+   * reused whenever the user retries — the URL is single-use in practice.
+   */
+  oauthAuthorize(id: string) {
+    return agentHttpClient.post<OAuthAuthorizeResult>(
+      `/mcp/connections/${id}/oauth/authorize`,
+    )
   },
 }

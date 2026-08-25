@@ -9,6 +9,7 @@ import { ConnectionsListView } from '@modules/connectors/ui/views/connections-li
 import { ConnectionDetailView } from '@modules/connectors/ui/views/connection-detail-view'
 import { McpBrowseView } from '@modules/connectors/ui/views/mcp-browse-view'
 import { AddConnectionView } from '@modules/connectors/ui/views/add-connection-view'
+import { OAuthConnectView } from '@modules/connectors/ui/views/oauth-connect-view'
 import { useEndpoint } from '@shared/model/use-endpoint'
 import { HttpApiError } from '@shared/api/http-client'
 import { toast } from '@shared/model/toast-store'
@@ -31,6 +32,7 @@ type View =
   | { name: 'detail'; id: string; initialResult?: ConnectionTestResult | null }
   | { name: 'browse' }
   | { name: 'add'; entry?: CatalogEntry }
+  | { name: 'connect'; entry: CatalogEntry }
 
 export function ConnectionsTab() {
   const [view, setView] = useState<View>({ name: 'list' })
@@ -60,10 +62,36 @@ export function ConnectionsTab() {
     return (
       <McpBrowseView
         entries={catalog.data ?? []}
+        connections={connections.data ?? []}
         loading={catalog.loading}
         error={catalog.error}
         onBack={() => setView({ name: 'list' })}
-        onPick={(entry) => setView({ name: 'add', entry })}
+        onOpen={(id) => setView({ name: 'detail', id })}
+        onPick={(entry) =>
+          setView(
+            entry.auth_type === 'oauth'
+              ? { name: 'connect', entry }
+              : { name: 'add', entry },
+          )
+        }
+      />
+    )
+  }
+
+  if (view.name === 'connect') {
+    return (
+      <OAuthConnectView
+        entry={view.entry}
+        onBack={() => {
+          // The connection exists from the moment sign-in starts, so a mid-flow back must
+          // refetch or the list would be missing a row the platform already has.
+          connections.refetch()
+          setView({ name: 'list' })
+        }}
+        onConnected={(conn) => {
+          connections.refetch()
+          setView({ name: 'detail', id: conn.id })
+        }}
       />
     )
   }
