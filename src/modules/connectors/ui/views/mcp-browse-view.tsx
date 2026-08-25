@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react'
-import { Search, ShieldAlert } from 'lucide-react'
-import type { CatalogEntry } from '@modules/connectors/api/mcp-connections-service'
+import { Check, Search, ShieldAlert } from 'lucide-react'
+import type {
+  CatalogEntry,
+  Connection,
+} from '@modules/connectors/api/mcp-connections-service'
 import { BackHeader } from '@modules/connectors/ui/components/back-header'
 import { McpLogo } from '@shared/ui/mcp-logo'
 import { Badge } from '@shared/ui/badge'
@@ -15,14 +18,34 @@ import { Input } from '@shared/ui/input'
  */
 interface Props {
   entries: CatalogEntry[]
+  /**
+   * What the user already has, so a card can say "connected" instead of offering a
+   * second copy. The platform does not reject a duplicate, so this is the only thing
+   * standing between one click too many and two Jira rows.
+   */
+  connections: Connection[]
   loading: boolean
   error: string | null
   onBack: () => void
   onPick: (entry: CatalogEntry) => void
+  onOpen: (id: string) => void
 }
 
-export function McpBrowseView({ entries, loading, error, onBack, onPick }: Props) {
+export function McpBrowseView({
+  entries,
+  connections,
+  loading,
+  error,
+  onBack,
+  onPick,
+  onOpen,
+}: Props) {
   const [query, setQuery] = useState('')
+
+  const existingByCatalogId = useMemo(
+    () => new Map(connections.map((c) => [c.catalog_id, c])),
+    [connections],
+  )
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -61,11 +84,13 @@ export function McpBrowseView({ entries, loading, error, onBack, onPick }: Props
         </p>
       ) : (
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {filtered.map((entry) => (
+          {filtered.map((entry) => {
+            const existing = existingByCatalogId.get(entry.id)
+            return (
             <button
               key={entry.id}
               type="button"
-              onClick={() => onPick(entry)}
+              onClick={() => (existing ? onOpen(existing.id) : onPick(entry))}
               className="flex flex-col gap-2 rounded-lg border border-divider bg-panel p-3 text-left transition-colors hover:bg-hover"
             >
               <span className="flex items-center gap-2">
@@ -76,15 +101,26 @@ export function McpBrowseView({ entries, loading, error, onBack, onPick }: Props
               </span>
               <span className="line-clamp-2 text-xs text-muted">{entry.description}</span>
               <span className="mt-auto flex flex-wrap gap-1">
+                {existing ? (
+                  existing.status === 'connected' ? (
+                    <Badge variant="success" leftIcon={<Check className="size-3" />}>
+                      connected
+                    </Badge>
+                  ) : (
+                    <Badge variant="warning">not signed in</Badge>
+                  )
+                ) : (
+                  entry.requires_login && <Badge variant="neutral">sign-in</Badge>
+                )}
                 {!entry.trusted && (
                   <Badge variant="warning" leftIcon={<ShieldAlert className="size-3" />}>
                     untrusted
                   </Badge>
                 )}
-                {entry.requires_login && <Badge variant="neutral">sign-in</Badge>}
               </span>
             </button>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Info } from 'lucide-react'
 import {
   mcpConnectionsService,
   type CatalogEntry,
@@ -16,16 +15,13 @@ import { HttpApiError } from '@shared/api/http-client'
 import { toast } from '@shared/model/toast-store'
 
 /**
- * Add a server — reached blank ("Custom") or seeded from a catalog entry.
+ * Add a server by hand — "Custom MCP", or a catalog entry the platform holds no
+ * provider config for (header-auth rows like Datadog).
  *
- * **Server URL is always asked for, even from the catalog.** Not one of the
- * eight catalog rows ships a `server_url` today, so posting a bare
- * `catalog_id` comes back 400 from `service.add_connection`. Seeding the field
- * from `entry.server_url` (rather than hiding it) means the day the platform
- * fills those in, this form starts arriving prefilled and nothing here changes.
- *
- * `oauth` is offered but disabled for the same reason one step further on:
- * `build_authorize_url` needs an `oauth_config` no catalog entry carries yet.
+ * OAuth providers do not come here: they carry no URL to type and no credential to
+ * paste, so Browse sends them straight to `OAuthConnectView`. The field is still
+ * seeded from `entry.server_url`, which the platform now fills for any catalog row
+ * it has a provider entry for.
  */
 interface Props {
   entry?: CatalogEntry
@@ -43,9 +39,7 @@ export function AddConnectionView({ entry, onCancel, onAdded }: Props) {
   const [name, setName] = useState(entry?.name ?? '')
   const [serverUrl, setServerUrl] = useState(entry?.server_url ?? '')
   const [transport, setTransport] = useState<McpTransport>(entry?.transport ?? 'http')
-  const [authType, setAuthType] = useState<McpAuthType>(
-    entry?.auth_type === 'oauth' ? 'header' : (entry?.auth_type ?? 'none'),
-  )
+  const [authType, setAuthType] = useState<McpAuthType>(entry?.auth_type ?? 'none')
   const [headerKey, setHeaderKey] = useState('Authorization')
   const [headerValue, setHeaderValue] = useState('')
   const [saving, setSaving] = useState(false)
@@ -86,16 +80,6 @@ export function AddConnectionView({ entry, onCancel, onAdded }: Props) {
     <div className="flex flex-col gap-4">
       <BackHeader onBack={onCancel}>{entry ? `Add ${entry.name}` : 'Add custom MCP'}</BackHeader>
 
-      {entry?.auth_type === 'oauth' && (
-        <p className="flex items-start gap-2 rounded-md border border-divider bg-surface px-2.5 py-2 text-xs text-muted">
-          <Info className="mt-0.5 size-3.5 shrink-0" />
-          <span>
-            {entry.name} normally signs in with OAuth, which is not configured on this
-            deployment yet. Add it with an API token header for now.
-          </span>
-        </p>
-      )}
-
       <Field label="Name">
         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Jira" />
       </Field>
@@ -131,7 +115,7 @@ export function AddConnectionView({ entry, onCancel, onAdded }: Props) {
           ]}
           value={authType}
           onChange={(v) => setAuthType(v as McpAuthType)}
-          disabledHint="OAuth is not configured on this deployment yet"
+          disabledHint="Sign-in is available on the Browse screen for supported providers"
         />
       </Field>
 
