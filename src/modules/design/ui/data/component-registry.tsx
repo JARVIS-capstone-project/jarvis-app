@@ -10,7 +10,12 @@ import { Badge } from '@shared/ui/badge'
 import type { BadgeVariant } from '@shared/ui/badge'
 import { Switch } from '@shared/ui/switch'
 import { Card } from '@shared/ui/card'
+import { Spinner } from '@shared/ui/spinner'
+import type { SpinnerSize, SpinnerTone } from '@shared/ui/spinner'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@shared/ui/accordion'
+import { ChatSection } from '@modules/chat/ui/components/chat-section'
+import { SessionHistory } from '@modules/chat/ui/components/session-history'
+import { Sidebar } from '@app/layout/sidebar'
 
 // ─────────────────────────────────────────────────────────────
 // Registry powering the /design/component gallery.
@@ -187,6 +192,42 @@ export const componentRegistry: ComponentDemo[] = [
     ),
   },
   {
+    name: 'ChatSection',
+    description:
+      'Full chat pane — welcome hero swaps for the message list on first send. Feature component (not a shared primitive); shares the global chat store, so messages typed here also show up on /new.',
+    controls: [],
+    defaultProps: {},
+    render: () => (
+      <div className="h-150 w-full">
+        <ChatSection />
+      </div>
+    ),
+  },
+  {
+    name: 'Sidebar',
+    description:
+      'App shell left rail — brand header, Features nav (Chat/Workspace), SessionHistory slot, Settings + Darkmode. Clicking Chat routes to /new; Darkmode switch is live and drives the whole app theme.',
+    controls: [],
+    defaultProps: {},
+    render: () => (
+      <div className="h-150 overflow-hidden rounded-2xl border border-divider">
+        <Sidebar />
+      </div>
+    ),
+  },
+  {
+    name: 'SessionHistory',
+    description:
+      'Recent chat threads list — rendered inside Sidebar. Mock data until the sessions API lands; sort icon is a placeholder.',
+    controls: [],
+    defaultProps: {},
+    render: () => (
+      <div className="w-72 rounded-2xl border border-divider bg-panel p-4">
+        <SessionHistory />
+      </div>
+    ),
+  },
+  {
     name: 'Accordion',
     description: 'Disclosure (Radix). Keyboard + aria handled; styled with tokens.',
     controls: [],
@@ -204,6 +245,24 @@ export const componentRegistry: ComponentDemo[] = [
           </AccordionItem>
         </Accordion>
       </div>
+    ),
+  },
+  {
+    name: 'Spinner',
+    description:
+      'Generic loading indicator. Use for buttons, sidebar rows, modal placeholders. For content with a strong layout shape (message lists, tables), prefer a skeleton.',
+    controls: [
+      { type: 'select', prop: 'size', options: ['sm', 'md', 'lg'] },
+      { type: 'select', prop: 'tone', options: ['brand', 'muted', 'inverse'] },
+      { type: 'text', prop: 'label', placeholder: '(icon-only)' },
+    ],
+    defaultProps: { size: 'md', tone: 'brand', label: 'Loading…' },
+    render: (p) => (
+      <Spinner
+        size={p.size as SpinnerSize}
+        tone={p.tone as SpinnerTone}
+        label={str(p.label)}
+      />
     ),
   },
 ]

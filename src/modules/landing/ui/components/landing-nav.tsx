@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowRight, Menu, Moon, Sun, X } from 'lucide-react'
 import { BrandMark } from '@shared/ui/brand-mark'
 import { useTheme } from '@app/providers/theme-context'
+import { env } from '@shared/config/env'
 
 interface NavLinkItem {
   label: string
@@ -14,7 +15,7 @@ interface NavLinkItem {
 const NAV_LINKS: NavLinkItem[] = [
   { label: 'Capabilities', href: '#capabilities' },
   { label: 'Protocol', href: '#protocol' },
-  { label: 'Dev', href: '/dev' },
+  ...(env.isDev ? [{ label: 'Dev', href: '/dev' }] : []),
 ]
 
 /**

@@ -1,4 +1,19 @@
-import { ReactorModel } from '@shared/ui/reactor-model'
+import { lazy, Suspense } from 'react'
+
+/**
+ * Split out of the main bundle. `reactor-model` pulls in three.js plus the
+ * react-three-fiber/drei stack — around 900 kB, and it is the single largest
+ * thing the app ships. It renders on the landing hero and nowhere else, so a
+ * static import made every user who signed in and went straight to the chat
+ * download a 3D engine they would never see.
+ *
+ * Splitting here rather than at `ArcReactor` keeps the promise in the
+ * docstring below: the HUD rings are plain SVG and still render on the page's
+ * own mount, with only the mesh in the middle arriving late.
+ */
+const ReactorModel = lazy(() =>
+  import('@shared/ui/reactor-model').then((m) => ({ default: m.ReactorModel })),
+)
 
 /**
  * Concentric HUD rings + the 3D reactor mesh at the center.
@@ -122,7 +137,13 @@ export function ArcReactor() {
         style={{ transform: 'translateZ(-140px)' }}
         className="absolute size-[min(70vw,600px)]"
       >
-        <ReactorModel />
+        {/* No fallback: the mesh already fades itself in once the glTF loads
+            (see reactor-model.tsx), and the rings around this slot carry the
+            composition on their own until it does. A spinner here would
+            announce a wait the design does not otherwise have. */}
+        <Suspense fallback={null}>
+          <ReactorModel />
+        </Suspense>
       </div>
     </div>
   )

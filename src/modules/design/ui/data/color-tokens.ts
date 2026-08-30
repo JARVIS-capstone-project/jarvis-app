@@ -73,6 +73,14 @@ export const lightSections: Section[] = [
       { name: 'warning-soft', token: 'rgba(224,150,42,0.15)', value: 'rgba(224,150,42,0.15)', usage: 'Warning pill / badge background' },
     ],
   },
+  {
+    title: 'Overlays',
+    cols: 3,
+    swatches: [
+      { name: 'scrim', token: 'rgba(0,0,0,0.60)', value: 'rgba(0,0,0,0.60)', usage: 'Drawer backdrop, badge overlays on media' },
+      { name: 'scrim-strong', token: 'rgba(0,0,0,0.80)', value: 'rgba(0,0,0,0.80)', usage: 'Hover state for scrim overlays' },
+    ],
+  },
 ]
 
 export const darkSections: Section[] = [
@@ -135,6 +143,14 @@ export const darkSections: Section[] = [
       { name: 'success-soft', token: 'rgba(94,194,122,0.15)', value: 'rgba(94,194,122,0.15)', usage: 'Success pill / badge background' },
       { name: 'danger-soft', token: 'rgba(242,97,87,0.15)', value: 'rgba(242,97,87,0.15)', usage: 'Danger pill / badge background' },
       { name: 'warning-soft', token: 'rgba(240,170,60,0.15)', value: 'rgba(240,170,60,0.15)', usage: 'Warning pill / badge background' },
+    ],
+  },
+  {
+    title: 'Overlays',
+    cols: 3,
+    swatches: [
+      { name: 'scrim', token: 'rgba(0,0,0,0.60)', value: 'rgba(0,0,0,0.60)', usage: 'Drawer backdrop, badge overlays on media' },
+      { name: 'scrim-strong', token: 'rgba(0,0,0,0.80)', value: 'rgba(0,0,0,0.80)', usage: 'Hover state for scrim overlays' },
     ],
   },
 ]
