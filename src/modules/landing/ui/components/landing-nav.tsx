@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowRight, Menu, Moon, Sun, X } from 'lucide-react'
+import { ArrowRight, ChevronDown, LayoutDashboard, LogOut, Menu, Moon, Sun, User, X } from 'lucide-react'
 import { BrandMark } from '@shared/ui/brand-mark'
 import { useTheme } from '@app/providers/theme-context'
 import { env } from '@shared/config/env'
+import { useAuthStore, useIsAuthenticated } from '@modules/auth/model/auth-store'
+import { useLogout } from '@modules/auth/model/use-logout'
+import { decodeAccessToken } from '@shared/lib/decode-jwt'
 
 interface NavLinkItem {
   label: string
@@ -48,6 +51,111 @@ function NavLink({
 }
 
 /**
+ * Signed-in user pill on the landing nav.
+ *
+ * Reads email from the persisted JWT (never fires `/auth/me` — the landing
+ * page is public and we don't want a token-invalid response to redirect a
+ * visitor away from the marketing page). Dropdown: Dashboard, Logout.
+ *
+ * Closes on: outside click, Escape, item click.
+ */
+function UserMenu({ scrolled }: { scrolled: boolean }) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const accessToken = useAuthStore((s) => s.accessToken)
+  const { logout } = useLogout()
+  const email = accessToken ? (decodeAccessToken(accessToken)?.email ?? null) : null
+  const label = email ?? 'Signed in'
+
+  useEffect(() => {
+    if (!open) return
+    const onClick = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  const trigger =
+    'group inline-flex items-center gap-2 rounded-full px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.3em] transition-all duration-300 cursor-pointer ' +
+    (scrolled
+      ? 'border border-divider bg-surface/60 text-heading hover:border-brand/50 hover:text-brand'
+      : 'border border-brand/50 bg-brand/5 text-heading backdrop-blur-md hover:bg-brand/10 hover:border-brand')
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className={trigger}
+      >
+        <span
+          aria-hidden="true"
+          className="grid size-6 place-items-center rounded-full bg-brand text-[10px] font-semibold text-white shadow-[0_0_12px_var(--brand-shadow)]"
+        >
+          <User className="size-3" />
+        </span>
+        <span className="max-w-[140px] truncate normal-case tracking-normal">{label}</span>
+        <ChevronDown
+          className={'size-3 transition-transform ' + (open ? 'rotate-180' : '')}
+          aria-hidden="true"
+        />
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            role="menu"
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+            className="absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-divider bg-surface/95 shadow-[0_16px_40px_var(--brand-shadow)] backdrop-blur-xl"
+          >
+            {email && (
+              <div className="border-b border-divider px-4 py-3 text-[11px]">
+                <p className="truncate font-mono uppercase tracking-[0.2em] text-muted">Signed in as</p>
+                <p className="mt-1 truncate text-body">{email}</p>
+              </div>
+            )}
+            <Link
+              to="/chat"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-3 px-4 py-3 font-mono text-[11px] uppercase tracking-[0.3em] text-body transition-colors hover:bg-brand/10 hover:text-brand"
+            >
+              <LayoutDashboard className="size-4" aria-hidden="true" />
+              Dashboard
+            </Link>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false)
+                void logout()
+              }}
+              className="flex w-full items-center gap-3 px-4 py-3 font-mono text-[11px] uppercase tracking-[0.3em] text-body transition-colors hover:bg-brand/10 hover:text-brand cursor-pointer"
+            >
+              <LogOut className="size-4" aria-hidden="true" />
+              Logout
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+/**
  * Fixed morphing top nav.
  *
  *   - Top of page       — full-bleed, transparent
@@ -66,6 +174,8 @@ export function LandingNav() {
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const { theme, toggle } = useTheme()
+  const isAuthed = useIsAuthenticated()
+  const { logout } = useLogout()
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20)
@@ -121,21 +231,25 @@ export function LandingNav() {
             <ThemeIcon className="size-4" aria-hidden="true" />
           </button>
 
-          <Link
-            to="/login"
-            className={
-              'group inline-flex items-center gap-1.5 rounded-full px-4 py-2 font-mono text-[11px] uppercase tracking-[0.3em] transition-all duration-300 cursor-pointer ' +
-              (morphed
-                ? 'bg-brand text-white shadow-[0_0_20px_var(--brand-shadow)] hover:bg-brand-hover'
-                : 'border border-brand/50 bg-brand/5 text-brand backdrop-blur-md hover:bg-brand/10 hover:border-brand')
-            }
-          >
-            Access
-            <ArrowRight
-              className="size-3 transition-transform group-hover:translate-x-0.5"
-              aria-hidden="true"
-            />
-          </Link>
+          {isAuthed ? (
+            <UserMenu scrolled={morphed} />
+          ) : (
+            <Link
+              to="/login"
+              className={
+                'group inline-flex items-center gap-1.5 rounded-full px-4 py-2 font-mono text-[11px] uppercase tracking-[0.3em] transition-all duration-300 cursor-pointer ' +
+                (morphed
+                  ? 'bg-brand text-white shadow-[0_0_20px_var(--brand-shadow)] hover:bg-brand-hover'
+                  : 'border border-brand/50 bg-brand/5 text-brand backdrop-blur-md hover:bg-brand/10 hover:border-brand')
+              }
+            >
+              Access
+              <ArrowRight
+                className="size-3 transition-transform group-hover:translate-x-0.5"
+                aria-hidden="true"
+              />
+            </Link>
+          )}
         </div>
 
         {/* Mobile hamburger */}
@@ -188,14 +302,38 @@ export function LandingNav() {
                 >
                   <ThemeIcon className="size-4" aria-hidden="true" />
                 </button>
-                <Link
-                  to="/login"
-                  onClick={() => setMenuOpen(false)}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-brand px-4 py-3 font-mono text-[11px] uppercase tracking-[0.3em] text-white shadow-[0_0_20px_var(--brand-shadow)] transition-colors hover:bg-brand-hover cursor-pointer"
-                >
-                  Access
-                  <ArrowRight className="size-3.5" aria-hidden="true" />
-                </Link>
+                {isAuthed ? (
+                  <>
+                    <Link
+                      to="/chat"
+                      onClick={() => setMenuOpen(false)}
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-brand px-4 py-3 font-mono text-[11px] uppercase tracking-[0.3em] text-white shadow-[0_0_20px_var(--brand-shadow)] transition-colors hover:bg-brand-hover cursor-pointer"
+                    >
+                      <LayoutDashboard className="size-3.5" aria-hidden="true" />
+                      Dashboard
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false)
+                        void logout()
+                      }}
+                      aria-label="Logout"
+                      className="grid size-11 place-items-center rounded-full border border-divider text-heading transition-colors hover:bg-brand/10 hover:text-brand cursor-pointer"
+                    >
+                      <LogOut className="size-4" aria-hidden="true" />
+                    </button>
+                  </>
+                ) : (
+                  <Link
+                    to="/login"
+                    onClick={() => setMenuOpen(false)}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-brand px-4 py-3 font-mono text-[11px] uppercase tracking-[0.3em] text-white shadow-[0_0_20px_var(--brand-shadow)] transition-colors hover:bg-brand-hover cursor-pointer"
+                  >
+                    Access
+                    <ArrowRight className="size-3.5" aria-hidden="true" />
+                  </Link>
+                )}
               </div>
             </div>
           </motion.div>

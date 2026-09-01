@@ -40,7 +40,11 @@ export function HeroSection() {
     offset: ['start start', 'end start'],
   })
 
-  const reactorY = useTransform(scrollYProgress, [0, 1], ['20%', '-45%'])
+  // Start at +6% (not 0%) to compensate for the fixed nav overlapping the top
+  // of the sticky viewport — a reactor at true center (50vh) reads as too high
+  // because the nav visually "eats" the top ~80px. End at -44% preserves the
+  // same 50% total parallax travel.
+  const reactorY = useTransform(scrollYProgress, [0, 1], ['6%', '-44%'])
   const contentY = useTransform(scrollYProgress, [0, 1], ['0%', '-140%'])
   const contentOpacity = useTransform(scrollYProgress, [0, 0.4, 0.75], [1, 1, 0])
 
@@ -82,7 +86,7 @@ export function HeroSection() {
             Absolute-positioned so its rings can spill past the column edge. */}
         <motion.div
           style={{ y: reduce ? staticY : reactorY }}
-          className="absolute inset-0 md:left-auto md:w-3/5"
+          className="absolute inset-0 origin-center scale-[0.85] md:left-auto md:w-3/5"
         >
           <ArcReactor />
         </motion.div>
