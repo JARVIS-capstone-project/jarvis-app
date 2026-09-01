@@ -128,7 +128,7 @@ function UserMenu({ scrolled }: { scrolled: boolean }) {
               </div>
             )}
             <Link
-              to="/chat"
+              to="/new"
               role="menuitem"
               onClick={() => setOpen(false)}
               className="flex items-center gap-3 px-4 py-3 font-mono text-[11px] uppercase tracking-[0.3em] text-body transition-colors hover:bg-brand/10 hover:text-brand"
@@ -305,7 +305,7 @@ export function LandingNav() {
                 {isAuthed ? (
                   <>
                     <Link
-                      to="/chat"
+                      to="/new"
                       onClick={() => setMenuOpen(false)}
                       className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-brand px-4 py-3 font-mono text-[11px] uppercase tracking-[0.3em] text-white shadow-[0_0_20px_var(--brand-shadow)] transition-colors hover:bg-brand-hover cursor-pointer"
                     >
