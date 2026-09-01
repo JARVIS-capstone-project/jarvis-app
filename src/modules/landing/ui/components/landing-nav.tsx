@@ -119,7 +119,7 @@ function UserMenu({ scrolled }: { scrolled: boolean }) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-            className="absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-divider bg-surface/95 shadow-[0_16px_40px_var(--brand-shadow)] backdrop-blur-xl"
+            className="absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-divider bg-surface/95 shadow-lg backdrop-blur-xl"
           >
             {email && (
               <div className="border-b border-divider px-4 py-3 text-[11px]">
