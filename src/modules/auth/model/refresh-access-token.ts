@@ -28,7 +28,7 @@ export function refreshAccessToken(): Promise<string | null> {
 
   inFlight = (async () => {
     try {
-      const res = await fetch(`${env.apiBaseUrl}/auth/refresh`, {
+      const res = await fetch(`${env.platformBaseUrl}/auth/refresh`, {
         method: 'POST',
         credentials: 'include',
       })

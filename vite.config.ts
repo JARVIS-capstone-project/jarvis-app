@@ -1,12 +1,17 @@
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
+// Dev proxy targets are constants — VITE_PLATFORM_BASE_URL / VITE_AGENT_BASE_URL
+// on the FE side stay relative (`/api`, `/agent`) so browser calls are same-origin
+// and Vite forwards them here. If a dev needs a non-default port, edit these two lines.
+const PLATFORM_DEV_TARGET = 'http://localhost:8080'
+const AGENT_DEV_TARGET = 'http://localhost:8000'
+
 // https://vite.dev/config/
-export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '')
-  const apiTarget = env.VITE_API_TARGET ?? 'http://localhost:8080'
-  const agentTarget = env.VITE_AGENT_TARGET ?? 'http://localhost:8000'
+export default defineConfig(() => {
+  const apiTarget = PLATFORM_DEV_TARGET
+  const agentTarget = AGENT_DEV_TARGET
 
   return {
     plugins: [react(), tailwindcss()],

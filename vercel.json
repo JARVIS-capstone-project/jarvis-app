@@ -1,9 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "https://REPLACE-WITH-PLATFORM-HOST/api/:path*"
-    }
+    { "source": "/api/:path*", "destination": "https://34-143-241-80.nip.io/api/:path*" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

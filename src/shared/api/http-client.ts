@@ -19,7 +19,7 @@ function buildRequest(
   options: RequestOptions,
 ): { url: URL; init: RequestInit } {
   const { params, body, headers, ...rest } = options
-  const url = new URL(`${env.apiBaseUrl}${path}`, window.location.origin)
+  const url = new URL(`${env.platformBaseUrl}${path}`, window.location.origin)
 
   if (params) {
     for (const [key, value] of Object.entries(params)) {

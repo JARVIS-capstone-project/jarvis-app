@@ -8,7 +8,7 @@ import { agentHttpClient } from '@shared/api/agent-http-client'
  *
  * Platform's `/health` is unauthenticated + tiny (`{status, timestamp}`).
  * We fetch it directly instead of going through httpClient because
- * httpClient prefixes `apiBaseUrl` (`/api`) and platform's health sits at
+ * httpClient prefixes `platformBaseUrl` (`/api`) and platform's health sits at
  * ROOT — no auth header needed either.
  */
 export const adminSystemService = {
