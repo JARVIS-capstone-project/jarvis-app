@@ -22,6 +22,12 @@ const HERO_TILT: [number, number, number] = [0.9, 0.25, 0]
 // read as a pop-up "zoom-in" effect. Fixed scale = instant, no animation.
 const MODEL_SCALE = 0.4
 
+// Downward world-space offset. The HERO_TILT above (0.9 rad forward-lean)
+// makes the top of the reactor loom toward the camera, which shifts the
+// visual center up. Nudge the group down so the mesh sits at the same
+// horizon as the HUD rings around it (arc-reactor.tsx).
+const HERO_POSITION: [number, number, number] = [0, -0.5, 0]
+
 /**
  * The rotating mesh. `<Center>` re-anchors the model's origin to (0,0,0) so
  * models exported from any tool sit centered regardless of their pivot point.
@@ -37,7 +43,7 @@ function SpinningReactor() {
   })
 
   return (
-    <group rotation={HERO_TILT} scale={MODEL_SCALE}>
+    <group rotation={HERO_TILT} scale={MODEL_SCALE} position={HERO_POSITION}>
       <group ref={spinRef}>
         <Center>
           <primitive object={scene} />
