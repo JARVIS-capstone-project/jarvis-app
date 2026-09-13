@@ -94,15 +94,30 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   if (!response.ok) {
-    // Peek at the body for the BE's ApiError shape (error + message). Best-effort:
-    // network hiccups / non-JSON bodies just leave `code` + `detail` null and the
-    // legacy message format takes over.
+    // Peek at the body for a BE failure envelope. Best-effort: network hiccups /
+    // non-JSON bodies just leave `code` + `detail` null and the legacy message
+    // format takes over.
+    //
+    // Two envelopes are in play and they disagree on the shape of `error`:
+    //   auth/jwt  → { error: "email_not_verified", message }      — flat string
+    //   private-KB → { status, error: { code, message } }          — nested object
+    // Reading only the flat shape made `code` an object and `detail` null for
+    // every KB failure, so MALWARE_DETECTED and its siblings could never be
+    // told apart from a generic 500 at the call site.
     let code: string | null = null
     let detail: string | null = null
     try {
-      const body = (await response.clone().json()) as { error?: string; message?: string }
-      code = body.error ?? null
-      detail = body.message ?? null
+      const body = (await response.clone().json()) as {
+        error?: string | { code?: string; message?: string }
+        message?: string
+      }
+      if (body.error && typeof body.error === 'object') {
+        code = body.error.code ?? null
+        detail = body.error.message ?? body.message ?? null
+      } else {
+        code = body.error ?? null
+        detail = body.message ?? null
+      }
     } catch {
       // ignore — not a JSON body
     }

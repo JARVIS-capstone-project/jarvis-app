@@ -13,6 +13,7 @@ import type {
  * flag agent conditions the user can't fix by retrying:
  *   - `upstream_rate_limited` — Gemini quota exhausted; wait it out
  *   - `requires_escalation`   — future: human-support handoff signal
+ *   - `malware_detected`      — an attached file matched a malware signature
  *
  * `collapsed` starts false (full banner) and flips to true when the user
  * clicks the X. In-memory only — a page reload clears the alert. Otherwise
@@ -20,7 +21,7 @@ import type {
  * — not per session — because rate-limit is process-wide; switching
  * sessions doesn't help.
  */
-export type ChatAlertCode = 'upstream_rate_limited' | 'requires_escalation'
+export type ChatAlertCode = | 'upstream_rate_limited'| 'requires_escalation' | 'malware_detected'
 
 export interface ChatAlert {
   code: ChatAlertCode

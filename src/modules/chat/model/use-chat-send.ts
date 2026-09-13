@@ -109,6 +109,14 @@ export function useChatSend(): UseChatSendResult {
       // to the real sid immediately after /sessions returns (see (3)).
       const seedKey = sid ?? PRE_SESSION_KEY
       store.ensure(seedKey)
+      // A previous pre-session send that failed on a blocked attachment leaves
+      // its seed in place (see the catch below — emptying it there remounts the
+      // composer and loses the file). Clear it HERE instead, immediately before
+      // re-seeding: the clear and the append land in the same synchronous block,
+      // so `messages.length` is never observably 0 and ChatSection's
+      // `showWelcome` never flips — no remount, and no second user bubble
+      // stacked on the orphaned one.
+      if (!sid) store.setMessages(PRE_SESSION_KEY, [])
       // Drop any leftover synthetic "The process was interrupted." marker so
       // a new turn doesn't stack on top of the previous interrupt notice.
       store.removeTrailingInterrupted(seedKey)
@@ -137,6 +145,24 @@ export function useChatSend(): UseChatSendResult {
         // (2) UPLOADS. Existing hook — parallel Promise.allSettled internally.
         if (uploadedAttachments.length > 0) {
           uploadedAttachments = await upload(uploadedAttachments)
+          // A rejected attachment blocks the send exactly as a failed one
+          // does — the difference is what the user is told. Raising the
+          // typed alert BEFORE the throw routes the catch below down its
+          // alert branch, so the specific explanation shows instead of the
+          // generic "try again" banner under a verdict retrying won't change.
+          const rejected = uploadedAttachments.find(
+            (a) => a.uploadStatus === 'rejected',
+          )
+          if (rejected) {
+            // Surface the file-level tiles before bailing out, so the blocked
+            // tile is visible on the user bubble alongside the alert.
+            store.patchMessageAttachments(seedKey, userMsg.id, uploadedAttachments)
+            if (rejected.rejectionCode === 'MALWARE_DETECTED') {
+              alertCode = 'malware_detected'
+              store.setAlert('malware_detected')
+            }
+            throw new Error(rejected.errorMessage ?? 'Attachment rejected')
+          }
           if (uploadedAttachments.some((a) => a.uploadStatus === 'failed')) {
             throw new Error('One or more uploads failed')
           }
@@ -313,8 +339,19 @@ export function useChatSend(): UseChatSendResult {
         // is set the bubbles KEEP existing — those represent an in-progress
         // turn the BE already persisted (interrupted-turn semantics; the
         // Retry banner + resume() take over).
-        if (!sid) {
+        //
+        // EXCEPTION — a blocked attachment. Emptying the seed on `/new` flips
+        // ChatSection's `showWelcome` back to true, which moves <ChatInput/>
+        // into a different JSX branch and REMOUNTS it. The remount destroys
+        // the composer's local attachment state (and the restore subscription
+        // that would have refilled it), so the blocked file silently vanished
+        // — on `/new` only, which is why an existing session kept it fine.
+        // Keeping the seed keeps the composer mounted, so the file stays put.
+        const blocked = alertCode === 'malware_detected'
+        if (!sid && !blocked) {
           store.setMessages(PRE_SESSION_KEY, [])
+          store.setStreaming(PRE_SESSION_KEY, false)
+        } else if (!sid) {
           store.setStreaming(PRE_SESSION_KEY, false)
         }
         // Ensure the slot exists so setError doesn't lose the banner.
