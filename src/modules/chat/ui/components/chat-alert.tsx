@@ -4,7 +4,7 @@ import { useChatSessionStore } from '@modules/chat/model/chat-session-store'
 import {
   CHAT_ALERT_CATALOG,
   type ChatAlertSpec,
-} from '@modules/chat/ui/components/chat-alert-catalog'
+} from '@modules/chat/ui/data/chat-alert-catalog'
 import { cn } from '@shared/lib/cn'
 
 /**
