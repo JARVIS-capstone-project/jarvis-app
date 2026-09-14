@@ -2,7 +2,28 @@ import { useCallback } from 'react'
 import { kbService } from '@modules/chat/api/kb-service'
 import { documentBlobCache } from '@modules/chat/model/document-blob-cache'
 import { useDocumentsStore } from '@modules/chat/model/documents-store'
-import type { ChatAttachment } from '@modules/chat/model/types'
+import type { ChatAttachment, KbRejectionCode } from '@modules/chat/model/types'
+import { HttpApiError } from '@shared/api/http-client'
+
+/**
+ * Reads a malware verdict off a thrown upload error.
+ *
+ * Prefers the BE's machine code, falling back to the 422 status because the
+ * code only survives if the body parsed — and a malware refusal the UI
+ * mistakes for a network blip is the failure mode worth defending against.
+ *
+ * Every other refusal (unscannable, oversized, storage) returns null and
+ * takes the ordinary `failed` path with its generic retry banner.
+ */
+function rejectionOf(err: unknown): KbRejectionCode | null {
+  if (!(err instanceof HttpApiError)) return null
+  if (err.code === 'MALWARE_DETECTED') return 'MALWARE_DETECTED'
+  if (err.status === 422) return 'MALWARE_DETECTED'
+  return null
+}
+
+/** Fallback copy, used when the BE sent no message. */
+const FALLBACK_MESSAGE = 'This file was rejected by malware scanning.'
 
 /**
  * Parallel upload orchestrator. Fires POST /documents once per attachment
@@ -49,17 +70,38 @@ export function useUploadDocuments() {
               jobId: res.job_id,
             }
           } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : 'Upload failed'
-            // Record the failure so /dev/document can display it.
+            // A verdict on the bytes (malware, unscannable, oversized) is a
+            // different outcome from the transport failing, and the two get
+            // different terminal states — see `UploadStatus`.
+            const rejectionCode = rejectionOf(err)
+            // The BE's own message is preferred — it names the signature that
+            // matched. `err.detail` is null when the body didn't parse, which
+            // is what the per-code fallback copy is for.
+            const beDetail = err instanceof HttpApiError ? err.detail : null
+            const errorMessage = rejectionCode
+              ? (beDetail ?? FALLBACK_MESSAGE)
+              : err instanceof Error
+                ? err.message
+                : 'Upload failed'
+            const status = rejectionCode ? 'rejected' : 'failed'
+            // Record the attempt so /dev/document can display it. Nothing was
+            // stored BE-side on a rejection, so there is no sourceId or jobId
+            // to carry — the row is the only trace the attempt happened.
             addDoc({
               key: crypto.randomUUID(),
               filename: a.file.name,
               contentType: a.file.type,
               sizeBytes: a.file.size,
-              status: 'failed',
+              status,
               errorMessage,
+              ...(rejectionCode ? { rejectionCode } : {}),
             })
-            return { ...a, uploadStatus: 'failed', errorMessage }
+            return {
+              ...a,
+              uploadStatus: status,
+              errorMessage,
+              ...(rejectionCode ? { rejectionCode } : {}),
+            }
           }
         }),
       )

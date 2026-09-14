@@ -17,10 +17,15 @@ import { cn } from '@shared/lib/cn'
  * rate-limit collapses to the short pill so the user keeps ambient awareness
  * of the throttle until they get a clean turn back.
  *
- * Route-gated: only renders inside an actual chat session (`/chat/:sessionId`).
- * On `/new` we deliberately hide the alert so a fresh conversation reads
- * clean — the alert stays in the store (persisted) and re-appears the moment
- * the user is back in a session view.
+ * Route-gated per code. By default an alert only renders inside an actual
+ * chat session (`/chat/:sessionId`), so a fresh conversation reads clean —
+ * the alert stays in the store and re-appears the moment the user is back
+ * in a session view.
+ *
+ * That default assumes the condition will still be true on a later turn.
+ * An upload verdict breaks the assumption: it is raised while the send is
+ * still pre-session, so there is no session to come back to and the alert
+ * would never be seen at all. Those codes opt in via `showsWithoutSession`.
  *
  * Content comes from the catalog keyed by the alert's `code`, so per-event
  * icon + wording changes live in one file (chat-alert-catalog.ts).
@@ -31,13 +36,19 @@ export function ChatAlert() {
   const dismissAlert = useChatSessionStore((s) => s.dismissAlert)
   const clearAlert = useChatSessionStore((s) => s.clearAlert)
 
-  if (!sessionId) return null
   if (!alert) return null
   const spec = CHAT_ALERT_CATALOG[alert.code]
   if (!spec) return null
+  // Read the code's spec BEFORE deciding the route gate — the answer is
+  // per-code, not global. See the docstring.
+  if (!sessionId && !spec.showsWithoutSession) return null
 
-  const onDismiss =
-    alert.code === 'requires_escalation' ? clearAlert : dismissAlert
+  // Collapsing to the pill is for a CONTINUING condition the user benefits
+  // from staying aware of — the upstream throttle is the case it was built
+  // for. A one-shot verdict on a single upload has nothing to stay aware of
+  // once it has been read, so dismissing it clears it outright; leaving a
+  // pill behind reads as a second, separate warning.
+  const onDismiss = spec.clearsOnDismiss ? clearAlert : dismissAlert
 
   return alert.collapsed ? (
     <CollapsedAlert spec={spec} />

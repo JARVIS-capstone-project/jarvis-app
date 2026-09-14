@@ -3,6 +3,7 @@ import { LifeBuoy } from 'lucide-react'
 import { AttachmentPreviewModal } from '@modules/chat/ui/components/attachment-preview-modal'
 import { AttachmentTile } from '@modules/chat/ui/components/attachment-tile'
 import { CitationList } from '@modules/chat/ui/components/citation-list'
+import { RefusalCard } from '@modules/chat/ui/components/refusal-card'
 import { StoredAttachmentTile } from '@modules/chat/ui/components/stored-attachment-tile'
 import type { PreviewTarget } from '@modules/chat/model/use-document-preview'
 import { cn } from '@shared/lib/cn'
@@ -46,6 +47,13 @@ export function MessageBubble({ message, isThinking = false }: MessageBubbleProp
   const hasAttachments = Boolean(message.attachments && message.attachments.length > 0)
   const hasText = message.content.length > 0
   const hasStatus = !isUser && !hasText && Boolean(message.status)
+  // Refusal card takes over the body — the raw NO_CONFIDENT_MATCH token
+  // on `content` was wiped by the store promotion, and the card supplies
+  // its own copy. Kept as a distinct branch (not a fallthrough of the
+  // markdown branch) so citation list, thinking indicator and interrupted
+  // marker paths remain independent — none of them should render on a
+  // refused turn.
+  const isRefusalVariant = !isUser && message.variant === 'refusal'
   const [preview, setPreview] = useState<PreviewTarget | null>(null)
   // Response-time caption above the bubble. Assistant messages only; skipped
   // on the synthetic "The process was interrupted." marker (no real turn
@@ -107,7 +115,9 @@ export function MessageBubble({ message, isThinking = false }: MessageBubbleProp
             )}
           </div>
         )}
-        {hasText ? (
+        {isRefusalVariant ? (
+          <RefusalCard reason={message.refusalReason} />
+        ) : hasText ? (
           isUser ? (
             // User-typed text — plaintext (never reformat what they entered).
             <div className="whitespace-pre-wrap wrap-break-word">
@@ -140,8 +150,13 @@ export function MessageBubble({ message, isThinking = false }: MessageBubbleProp
       </div>
       {/* Sources this answer rests on. Below the content so it reads as a
           footnote, and appended rather than inserted so the arrival of
-          `turn_end` does not shift the text the user is already reading. */}
-      {!isUser && !message.interrupted && message.citationRefs?.length ? (
+          `turn_end` does not shift the text the user is already reading.
+          Suppressed on a refusal — the card says the answer was withheld,
+          and a "Verified sources" strip beneath it would say the opposite. */}
+      {!isUser &&
+      !message.interrupted &&
+      !isRefusalVariant &&
+      message.citationRefs?.length ? (
         <CitationList refs={message.citationRefs} />
       ) : null}
       {preview && (

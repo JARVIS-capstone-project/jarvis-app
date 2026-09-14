@@ -96,8 +96,15 @@ export function ChatInput({ disabled }: ChatInputProps) {
   // reading `session.streaming` here, the composer would look enabled
   // for the entire first-message SSE on /new.
   const isBusy = busy || session.streaming
+  // A blocked attachment holds Send down until it is removed. Re-sending it
+  // would re-upload the same bytes for the same refusal, so the button would
+  // be offering something that cannot work. The alert copy names the way out.
+  const hasBlocked = attachments.some((a) => a.uploadStatus === 'rejected')
   const canSend =
-    (value.trim().length > 0 || attachments.length > 0) && !disabled && !isBusy
+    (value.trim().length > 0 || attachments.length > 0) &&
+    !hasBlocked &&
+    !disabled &&
+    !isBusy
 
   const submit = async () => {
     if (!canSend) return
