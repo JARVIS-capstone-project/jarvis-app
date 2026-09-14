@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router'
 import { agentService } from '@modules/chat/api/agent-service'
 import type { AttachmentIn, MessageDTO } from '@modules/chat/api/agent-types'
 import { useChatSessionStore } from '@modules/chat/model/chat-session-store'
+import { isRefusal, parseRefusalReason } from '@modules/chat/model/refusal'
+import { useRollbackHintsStore } from '@modules/chat/model/rollback-hints-store'
 import type {
   ChatMessage,
   MessageRole,
@@ -71,6 +73,16 @@ export function useHydrateSession(sessionId: string | null | undefined): void {
           })
         }
         useChatSessionStore.getState().setMessages(sessionId, messages)
+        // Rollback self-heal: a hint that was written during the live turn
+        // is only truthful if the BE actually rolled the turn back — which
+        // manifests as `GET /sessions/{id}` returning fewer turns than the
+        // in-memory transcript had. If any assistant message came back on
+        // hydration, the "no answer" story the banner would tell is stale.
+        // Clear it so the notice does not fire on a session that already
+        // has a valid answer sitting in it.
+        if (messages.some((m) => m.role === 'assistant' && !m.interrupted)) {
+          useRollbackHintsStore.getState().clear(sessionId)
+        }
       } catch (err) {
         if (cancelled) return
         const msg = err instanceof Error ? err.message : String(err)
@@ -101,10 +113,18 @@ export function useHydrateSession(sessionId: string | null | undefined): void {
  *   - `createdAt`: 0 — historical marker; not used for sorting (BE order wins).
  */
 function fromMessageDto(dto: MessageDTO): ChatMessage {
+  const role: MessageRole = dto.role === 'assistant' ? 'assistant' : 'user'
+  // Refusal detection on hydration: a NO_CONFIDENT_MATCH answer that landed
+  // in a previous session must render as the same card the live path
+  // produces — otherwise the token would flash into view every time the
+  // page reloads. Applied here so the mapping is single-source.
+  const isRefusalMsg = role === 'assistant' && isRefusal(dto.content)
   return {
     id: crypto.randomUUID(),
-    role: (dto.role === 'assistant' ? 'assistant' : 'user') satisfies MessageRole,
-    content: dto.content,
+    role,
+    // Wipe the raw token — the card renderer supplies its own copy. See
+    // markLastAssistantRefusal for the mirror on the live path.
+    content: isRefusalMsg ? '' : dto.content,
     createdAt: 0,
     attachments: dto.attachments && dto.attachments.length > 0
       ? dto.attachments.map(fromAttachmentIn)
@@ -113,6 +133,8 @@ function fromMessageDto(dto: MessageDTO): ChatMessage {
     responseTimeMs: dto.turn?.response_time_ms ?? null,
     requiresEscalation: dto.turn?.requires_escalation ?? null,
     citationRefs: dto.turn?.citation_refs ?? null,
+    variant: isRefusalMsg ? 'refusal' : undefined,
+    refusalReason: isRefusalMsg ? parseRefusalReason(dto.content) : undefined,
   }
 }
 

@@ -49,9 +49,23 @@ export interface ChatAttachment {
   sourceId?: string
   /** Set after POST /documents returns — success OR failure. */
   jobId?: string
-  /** Set on 'failed'. */
+  /** Set on 'failed' and 'rejected'. */
   errorMessage?: string
+  /** The BE's machine code, set on 'rejected' only. Decides which tile
+   *  overlay and which composer alert the user sees. */
+  rejectionCode?: KbRejectionCode
 }
+
+/**
+ * The `KbErrorCode` value that represents a malware verdict on the file
+ * itself rather than a transport problem. Mirrors the BE enum member.
+ *
+ * The BE has other refusal codes (`SCANNER_UNAVAILABLE`, `FILE_TOO_LARGE`).
+ * They are deliberately NOT modelled here: they keep the pre-existing
+ * `failed` path and its generic retry banner. Widen this union only when a
+ * dedicated surface for one of them is actually wanted.
+ */
+export type KbRejectionCode = 'MALWARE_DETECTED'
 
 export interface ChatMessage {
   id: string
@@ -108,14 +122,31 @@ export interface ChatMessage {
    * rendered list does not depend on how the message reached the client.
    */
   citationRefs?: CitationRef[] | null
+  /**
+   * Optional bubble renderer selector. Absent → the default text/markdown
+   * bubble. `refusal` → a dedicated card explaining that the agent could
+   * not answer confidently; the raw NO_CONFIDENT_MATCH token in `content`
+   * is suppressed by the renderer. Detected by `isRefusal(content)`, and
+   * carried through hydration so the card survives a reload.
+   */
+  variant?: 'refusal'
+  /** Set on `variant: 'refusal'` only — the "why" clause parsed off the
+   *  token wrapper, or null when the bare token had no explanation. */
+  refusalReason?: string | null
 }
 
 /**
  * Full upload-status set used across the composer lifecycle. The persisted
  * `UploadedDocument.status` is a strict subset (only terminal states) —
  * see below.
+ *
+ * `rejected` is deliberately NOT folded into `failed`. A failure is the
+ * transport giving out — retrying the same bytes is the right move, and the
+ * UI offers it. A rejection is a verdict the BE reached ON those bytes, and
+ * retrying re-sends the same hostile file for the same answer. Rendering the
+ * two alike would put a Retry button under a malware finding.
  */
-export type UploadStatus = 'pending' | 'uploading' | 'done' | 'failed'
+export type UploadStatus = 'pending' | 'uploading' | 'done' | 'failed' | 'rejected'
 
 /**
  * A file the user has attempted to upload via POST /api/kb/documents.
@@ -138,10 +169,12 @@ export interface UploadedDocument {
   contentType: string
   sizeBytes: number
   /** Only terminal outcomes get persisted — pending/uploading are transient. */
-  status: Extract<UploadStatus, 'done' | 'failed'>
+  status: Extract<UploadStatus, 'done' | 'failed' | 'rejected'>
   /** ISO timestamps from the BE — set on 'done' only. */
   createdAt?: string
   fileExpiresAt?: string
-  /** Error message from KbFailureResponse — set on 'failed' only. */
+  /** Error message from KbFailureResponse — set on 'failed' / 'rejected'. */
   errorMessage?: string
+  /** The BE's machine code — set on 'rejected' only. See `KbRejectionCode`. */
+  rejectionCode?: KbRejectionCode
 }

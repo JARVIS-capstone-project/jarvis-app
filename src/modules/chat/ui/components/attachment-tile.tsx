@@ -1,4 +1,4 @@
-import { AlertCircle, Loader2, X } from 'lucide-react'
+import { AlertCircle, Loader2, ShieldAlert, X } from 'lucide-react'
 import { usePdfThumbnail } from '@modules/chat/model/use-pdf-thumbnail'
 import type { ChatAttachment } from '@modules/chat/model/types'
 import { cn } from '@shared/lib/cn'
@@ -28,7 +28,11 @@ export function AttachmentTile({ attachment, onRemove, onOpenPreview }: Attachme
   const ext = getExtension(attachment.file.name)
   const isUploading = attachment.uploadStatus === 'uploading'
   const isFailed = attachment.uploadStatus === 'failed'
-  const canOpen = Boolean(onOpenPreview) && !isUploading && !isFailed
+  const isRejected = attachment.uploadStatus === 'rejected'
+  // Preview stays closed on a rejection too. The bytes are still sitting in
+  // the browser, so a preview is technically possible — but opening a file
+  // the scanner just called malware is not something the UI should invite.
+  const canOpen = Boolean(onOpenPreview) && !isUploading && !isFailed && !isRejected
 
   const body = (
     <>
@@ -40,8 +44,17 @@ export function AttachmentTile({ attachment, onRemove, onOpenPreview }: Attachme
 
   return (
     <div
-      className="relative size-30 shrink-0 overflow-hidden rounded-lg border border-divider bg-panel"
-      title={isFailed ? attachment.errorMessage ?? attachment.file.name : attachment.file.name}
+      className={cn(
+        'relative size-30 shrink-0 overflow-hidden rounded-lg border bg-panel',
+        // A blocked file earns a colored frame so it reads as the odd one
+        // out in a row of tiles, not just another thumbnail.
+        isRejected ? 'border-danger' : 'border-divider',
+      )}
+      title={
+        isFailed || isRejected
+          ? (attachment.errorMessage ?? attachment.file.name)
+          : attachment.file.name
+      }
     >
       {/* One click target for the whole tile — a button when a consumer
           wants the preview modal, a plain div otherwise (design gallery). */}
@@ -79,6 +92,18 @@ export function AttachmentTile({ attachment, onRemove, onOpenPreview }: Attachme
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-scrim text-white">
           <AlertCircle className="size-6 text-danger" />
           <span className="text-[10px] uppercase tracking-wider">Failed</span>
+        </div>
+      )}
+
+      {/* Rejected overlay — the BE reached a verdict on these bytes and
+          stored nothing. Covers the thumbnail entirely: a preview showing
+          through under a "blocked" label undercuts the message. */}
+      {isRejected && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-scrim-strong px-1 text-center text-white">
+          <ShieldAlert className="size-6 text-danger" />
+          <span className="text-[10px] font-semibold uppercase tracking-wider">
+            Blocked
+          </span>
         </div>
       )}
 

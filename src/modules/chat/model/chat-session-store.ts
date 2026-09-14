@@ -13,6 +13,7 @@ import type {
  * flag agent conditions the user can't fix by retrying:
  *   - `upstream_rate_limited` — Gemini quota exhausted; wait it out
  *   - `requires_escalation`   — future: human-support handoff signal
+ *   - `malware_detected`      — an attached file matched a malware signature
  *
  * `collapsed` starts false (full banner) and flips to true when the user
  * clicks the X. In-memory only — a page reload clears the alert. Otherwise
@@ -20,7 +21,7 @@ import type {
  * — not per session — because rate-limit is process-wide; switching
  * sessions doesn't help.
  */
-export type ChatAlertCode = 'upstream_rate_limited' | 'requires_escalation'
+export type ChatAlertCode = | 'upstream_rate_limited'| 'requires_escalation' | 'malware_detected'
 
 export interface ChatAlert {
   code: ChatAlertCode
@@ -92,6 +93,12 @@ interface Store {
   /** Attach the turn's resolved citations to the LAST assistant message. Same
    *  lifecycle as `setLastAssistantResponseTime`. */
   setLastAssistantCitations: (sessionId: string, refs: CitationRef[]) => void
+  /** Promote the LAST assistant message to a refusal variant and wipe the
+   *  raw NO_CONFIDENT_MATCH token from its content — the card renderer
+   *  supplies its own copy. Called from `use-chat-send` at `turn_end` when
+   *  the accumulated content matches `isRefusal()`. No-op if the last
+   *  message isn't assistant. */
+  markLastAssistantRefusal: (sessionId: string, reason: string | null) => void
   setStreaming: (sessionId: string, v: boolean) => void
   /** Flip while `GET /sessions/{id}` is in flight. */
   setHydrating: (sessionId: string, v: boolean) => void
@@ -229,6 +236,24 @@ export const useChatSessionStore = create<Store>((set) => ({
       const last = msgs[msgs.length - 1]
       if (!last || last.role !== 'assistant') return s
       msgs[msgs.length - 1] = { ...last, citationRefs: refs }
+      return { byId: { ...s.byId, [sessionId]: { ...cur, messages: msgs } } }
+    }),
+
+  markLastAssistantRefusal: (sessionId, reason) =>
+    set((s) => {
+      const cur = s.byId[sessionId] ?? emptyState()
+      const msgs = [...cur.messages]
+      const last = msgs[msgs.length - 1]
+      if (!last || last.role !== 'assistant') return s
+      // Wipe content so the RefusalCard is the only thing the user sees —
+      // the raw NO_CONFIDENT_MATCH token would otherwise flash for a beat
+      // between the last text_delta and this promotion.
+      msgs[msgs.length - 1] = {
+        ...last,
+        content: '',
+        variant: 'refusal',
+        refusalReason: reason,
+      }
       return { byId: { ...s.byId, [sessionId]: { ...cur, messages: msgs } } }
     }),
 
