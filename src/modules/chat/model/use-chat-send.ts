@@ -7,6 +7,8 @@ import {
   useChatSessionStore,
   type ChatAlertCode,
 } from '@modules/chat/model/chat-session-store'
+import { isRefusal, parseRefusalReason } from '@modules/chat/model/refusal'
+import { useRollbackHintsStore } from '@modules/chat/model/rollback-hints-store'
 import { useSessionsStore } from '@modules/chat/model/sessions-store'
 import { StatusStream } from '@modules/chat/model/status-stream'
 import { useSseStream } from '@modules/chat/model/use-sse-stream'
@@ -38,6 +40,38 @@ interface UseChatSendResult {
 
 const ERROR_BANNER = 'Error happened please try again'
 const TITLE_MAX = 80
+
+/**
+ * Best-effort humanisation of a BE `finish_reason` for the rollback
+ * notice. Unknown codes fall through to a generic sentence — the notice
+ * is deliberately vague when we don't know more so we never mislead.
+ */
+const ROLLBACK_REASONS: Record<string, string> = {
+  upstream_unavailable: 'the model was temporarily unreachable.',
+  upstream_rate_limited: 'the model was rate-limited.',
+  faithfulness_gate_failed:
+    "the drafted answer wasn't well supported by the evidence.",
+  validation_error: 'the answer could not be validated.',
+}
+const ROLLBACK_REASON_FALLBACK = 'the answer could not be produced.'
+
+function humanRollbackReason(finish?: string | null): string {
+  if (!finish) return ROLLBACK_REASON_FALLBACK
+  return ROLLBACK_REASONS[finish] ?? ROLLBACK_REASON_FALLBACK
+}
+
+/**
+ * Pulls the CURRENT accumulated content of the last assistant message off
+ * the store — used at `turn_end` to check whether the stream produced a
+ * NO_CONFIDENT_MATCH refusal. Reads from the store rather than a local
+ * buffer because `patchLastAssistant` is what accumulates text_deltas
+ * (see chat-session-store); mirroring that here would double-buffer.
+ */
+function readLastAssistantContent(sessionId: string): string {
+  const cur = useChatSessionStore.getState().byId[sessionId]
+  const last = cur?.messages[cur.messages.length - 1]
+  return last?.role === 'assistant' ? last.content : ''
+}
 
 /**
  * BE error/finish codes that map to a typed ChatAlert (rate-limit today,
@@ -283,6 +317,30 @@ export function useChatSend(): UseChatSendResult {
                       .getState()
                       .touchSession(sid!, snapshot.text)
                   }
+                  // Rollback notice — persist a hint keyed by session so a
+                  // reload of the (now-empty) session can still explain what
+                  // happened. Written unconditionally on `rolled_back`; the
+                  // notice component only surfaces it when GET returns zero
+                  // messages, and self-heals otherwise.
+                  if (frame.data.rolled_back && sid) {
+                    useRollbackHintsStore.getState().set(sid, {
+                      attemptedMessage: snapshot.text,
+                      reason: humanRollbackReason(frame.data.finish_reason),
+                      at: new Date().toISOString(),
+                    })
+                  }
+                  // Refusal card — the agent wrote NO_CONFIDENT_MATCH into
+                  // the answer text. Promote the assistant bubble to the
+                  // refusal variant so the raw token doesn't ship to the
+                  // user. Reads the JUST-appended content off the store so
+                  // it sees every text_delta the stream produced.
+                  const lastContent = readLastAssistantContent(sid!)
+                  if (isRefusal(lastContent)) {
+                    store.markLastAssistantRefusal(
+                      sid!,
+                      parseRefusalReason(lastContent),
+                    )
+                  }
                 }
                 // thinking_end / tool_* / warning / turn_start —
                 // typed for parser safety but not wired to UI yet.
@@ -518,6 +576,20 @@ export function useChatSend(): UseChatSendResult {
                     useSessionsStore
                       .getState()
                       .touchSession(sessionId, last.content)
+                  }
+                  if (frame.data.rolled_back) {
+                    useRollbackHintsStore.getState().set(sessionId, {
+                      attemptedMessage: last.content,
+                      reason: humanRollbackReason(frame.data.finish_reason),
+                      at: new Date().toISOString(),
+                    })
+                  }
+                  const lastContent = readLastAssistantContent(sessionId)
+                  if (isRefusal(lastContent)) {
+                    store.markLastAssistantRefusal(
+                      sessionId,
+                      parseRefusalReason(lastContent),
+                    )
                   }
                 }
               },

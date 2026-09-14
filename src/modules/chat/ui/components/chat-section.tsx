@@ -3,6 +3,7 @@ import { useParams } from 'react-router'
 import { ChatInput } from '@modules/chat/ui/components/chat-input'
 import { ChatMessages } from '@modules/chat/ui/components/chat-messages'
 import { MessageSkeleton } from '@modules/chat/ui/components/message-skeleton'
+import { RollbackNotice } from '@modules/chat/ui/components/rollback-notice'
 import { WelcomeHero } from '@modules/chat/ui/components/welcome-hero'
 import {
   PRE_SESSION_KEY,
@@ -84,6 +85,15 @@ export function ChatSection({ onExpandSidebar }: ChatSectionProps = {}) {
         <>
           {hydrating && messages.length === 0 ? (
             <MessageSkeleton />
+          ) : sessionId && !hydrating && messages.length === 0 ? (
+            // The session exists on the URL but has no messages — the classic
+            // "first turn was rolled back BE-side" outcome. RollbackNotice
+            // renders itself only when a persisted hint for this sessionId
+            // exists, so an unrelated empty session (rare) still gets the
+            // welcome-hero-less blank pane rather than a bogus banner.
+            <div className="flex-1 overflow-y-auto px-6 py-6">
+              <RollbackNotice sessionId={sessionId} />
+            </div>
           ) : (
             <ChatMessages messages={messages} streaming={streaming} />
           )}

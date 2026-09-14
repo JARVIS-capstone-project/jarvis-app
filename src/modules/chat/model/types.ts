@@ -122,6 +122,17 @@ export interface ChatMessage {
    * rendered list does not depend on how the message reached the client.
    */
   citationRefs?: CitationRef[] | null
+  /**
+   * Optional bubble renderer selector. Absent → the default text/markdown
+   * bubble. `refusal` → a dedicated card explaining that the agent could
+   * not answer confidently; the raw NO_CONFIDENT_MATCH token in `content`
+   * is suppressed by the renderer. Detected by `isRefusal(content)`, and
+   * carried through hydration so the card survives a reload.
+   */
+  variant?: 'refusal'
+  /** Set on `variant: 'refusal'` only — the "why" clause parsed off the
+   *  token wrapper, or null when the bare token had no explanation. */
+  refusalReason?: string | null
 }
 
 /**
