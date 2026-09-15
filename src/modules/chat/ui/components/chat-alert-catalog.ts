@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react'
-import { AlertTriangle, LifeBuoy, ShieldAlert } from 'lucide-react'
+import { AlertTriangle, FileWarning, FileX, LifeBuoy, ShieldAlert } from 'lucide-react'
 import type { ChatAlertCode } from '@modules/chat/model/chat-session-store'
 
 /**
@@ -82,6 +82,36 @@ export const CHAT_ALERT_CATALOG: Record<ChatAlertCode, ChatAlertSpec> = {
     description:
       'An attached file matched a known malware signature. It was not stored, and your message was not sent. Remove it from the message to continue.',
     short: 'Attachment blocked by malware scanning',
+    showsWithoutSession: true,
+    clearsOnDismiss: true,
+  },
+  // Fires at pick time, BEFORE the file leaves the browser — matches the
+  // BE cap (`kb.max-upload-size-mb`, default 25) so the user does not spend
+  // bandwidth on an upload that is guaranteed to 413. Purely a UX pre-check;
+  // the BE remains the authoritative gate.
+  file_too_large: {
+    tone: 'danger',
+    Icon: FileWarning,
+    title: 'File is too large to upload',
+    description:
+      'One or more files exceed the 25 MB limit. They were not attached — pick a smaller file to continue.',
+    short: 'File over the 25 MB limit — not attached',
+    showsWithoutSession: true,
+    clearsOnDismiss: true,
+  },
+  // Fires at pick time when the extension is not on the FE allowlist. The
+  // allowlist mirrors what the agent's private-KB extractor can actually
+  // read (see `private_kb/content.py`): PDF, Word, common text/log formats,
+  // and inline-previewable images. Anything else uploads fine on the BE
+  // (it accepts any type) but produces no useful text for the RAG turn,
+  // so we reject up-front to save the round-trip.
+  file_type_not_supported: {
+    tone: 'danger',
+    Icon: FileX,
+    title: 'File type not supported',
+    description:
+      'One or more files were not attached. Supported types: PDF, Word (.docx), text/log/CSV/JSON/Markdown, and PNG/JPEG/GIF/WebP images.',
+    short: 'Unsupported file type — not attached',
     showsWithoutSession: true,
     clearsOnDismiss: true,
   },

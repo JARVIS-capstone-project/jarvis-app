@@ -21,7 +21,12 @@ import type {
  * — not per session — because rate-limit is process-wide; switching
  * sessions doesn't help.
  */
-export type ChatAlertCode = | 'upstream_rate_limited'| 'requires_escalation' | 'malware_detected'
+export type ChatAlertCode =
+  | 'upstream_rate_limited'
+  | 'requires_escalation'
+  | 'malware_detected'
+  | 'file_too_large'
+  | 'file_type_not_supported'
 
 export interface ChatAlert {
   code: ChatAlertCode

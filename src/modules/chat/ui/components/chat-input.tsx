@@ -39,7 +39,18 @@ export function ChatInput({ disabled }: ChatInputProps) {
   const [busy, setBusy] = useState(false)
   const [resuming, setResuming] = useState(false)
   const [preview, setPreview] = useState<PreviewTarget | null>(null)
-  const { attachments, pick, remove, reset, replaceAll } = useComposerAttachments()
+  const setAlert = useChatSessionStore((s) => s.setAlert)
+  const { attachments, pick, remove, reset, replaceAll } = useComposerAttachments({
+    // Route each client-side rejection reason to its own typed alert. If a
+    // mixed batch produces both, `pick` fires once per reason and setAlert's
+    // last-write-wins means the user sees the *last* one fired — kept in the
+    // hook's own order (unsupported first, then size) so the size warning
+    // wins visibility, matching the more specific "your file was too big"
+    // ask over the broader type list.
+    onReject: (reason) => {
+      setAlert(reason === 'too_large' ? 'file_too_large' : 'file_type_not_supported')
+    },
+  })
   const { send, resume, abort } = useChatSend()
   const taRef = useRef<HTMLTextAreaElement>(null)
 
@@ -219,6 +230,11 @@ export function ChatInput({ disabled }: ChatInputProps) {
               <input
                 type="file"
                 multiple
+                // The native OS picker filters by this hint, but it is only a
+                // hint — "Show all files" and drag-and-drop bypass it, so the
+                // authoritative check lives in `useComposerAttachments.pick`.
+                // Kept in sync with `ALLOWED_EXTENSIONS` there.
+                accept=".pdf,.docx,.txt,.log,.md,.csv,.json,.png,.jpg,.jpeg,.gif,.webp"
                 aria-label="Attach files"
                 className="sr-only"
                 disabled={isBusy}
