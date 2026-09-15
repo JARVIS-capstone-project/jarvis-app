@@ -2,6 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     { "source": "/api/:path*", "destination": "https://platform-api-uu3trxh3xa-as.a.run.app/api/:path*" },
+    { "source": "/health", "destination": "https://platform-api-uu3trxh3xa-as.a.run.app/health" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
